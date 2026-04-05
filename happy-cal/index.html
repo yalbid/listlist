@@ -744,7 +744,7 @@ function PopupToast({data,iC}){
           startBlink(ch?.name);
           playChime();
           if(Notification.permission==='granted'){
-            try{if(swReg){swReg.showNotification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup'});}else{new Notification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup'});}}catch(e){}
+            const nIcon=ch&&ch.imageFile&&iC[ch.imageFile]?iC[ch.imageFile]:undefined;try{if(swReg){swReg.showNotification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup',icon:nIcon});}else{new Notification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup',icon:nIcon});}}catch(e){}
           }
         }else{showPopup(ln.text,ch)}
         setPS({lastTrigger:now,nextInterval:(20+Math.random()*20)*60});
