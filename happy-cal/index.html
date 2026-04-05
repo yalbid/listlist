@@ -374,46 +374,17 @@ function DeadlineCalendar(){
   const[dls,setDls]=useState([]);
 
   useEffect(()=>{
-    const loadDoujinshi=()=>new Promise(resolve=>{
-      try{
-        const dbr=indexedDB.open('doujinshi-tracker-db');
-        dbr.onupgradeneeded=()=>{dbr.transaction.abort()};
-        dbr.onerror=()=>resolve([]);
-        dbr.onblocked=()=>resolve([]);
-        dbr.onsuccess=e=>{
-          const db=e.target.result;
-          try{
-            if(!db.objectStoreNames.contains('projects')){db.close();return resolve([])}
-            const tx=db.transaction('projects','readonly');
-            const rq=tx.objectStore('projects').get('data');
-            rq.onsuccess=ev=>{
-              db.close();
-              const rec=ev.target.result;
-              const projects=rec&&rec.value?rec.value:[];
-              if(!Array.isArray(projects))return resolve([]);
-              const items=[];
-              const isDone=p=>{let t=0,d=0;if(p.plot){t++;if(p.plot.done)d++}['conti','rough','artwork'].forEach(ph=>{if(p[ph])p[ph].forEach(pg=>{t++;if(pg.done)d++})});return t>0&&d>=t};
-              projects.filter(p=>!isDone(p)&&p.deadlines).forEach(p=>{
-                [{key:'conti',label:'콘티',type:'conti'},{key:'rough',label:'러프',type:'rough'},{key:'artwork',label:'작화',type:'artwork'},{key:'review',label:'퇴고',type:'review'},{key:'submission',label:'입고',type:'submission'}].forEach(dt=>{
-                  if(p.deadlines[dt.key])items.push({id:`dj-${p.id}-${dt.key}`,name:`${p.title} ${dt.label}`,deadline:p.deadlines[dt.key],type:dt.type})
-                })
-              });
-              resolve(items);
-            };
-            rq.onerror=()=>{db.close();resolve([])};
-          }catch(err){db.close();resolve([])}
-        };
-      }catch(err){resolve([])}
-    });
-
-    const load=()=>{
+    const load=async()=>{
       const items=[];
-      // 커미션 트래커
-      try{const raw=localStorage.getItem('commission-tracker-data');if(raw){const d=JSON.parse(raw);(d.commissions||[]).filter(c=>c.deadline&&c.deadline.length>=10&&c.status!=='completed').forEach(c=>{items.push({id:'c-'+c.id,name:c.name,deadline:c.deadline,type:'commission'})})}}catch{}
-      // 동인지 트래커
-      loadDoujinshi().then(djItems=>{
-        setDls([...items,...djItems]);
-      }).catch(()=>{setDls(items)});
+      try{
+        const[commDlDoc,dojDlDoc]=await Promise.all([
+          fireDb.collection('trackerSync').doc('deadlines_commission').get(),
+          fireDb.collection('trackerSync').doc('deadlines_doujinshi').get()
+        ]);
+        if(commDlDoc.exists)(commDlDoc.data().items||[]).forEach(c=>items.push(c));
+        if(dojDlDoc.exists)(dojDlDoc.data().items||[]).forEach(c=>items.push(c));
+      }catch(e){console.warn('Deadline load failed:',e)}
+      setDls(items);
     };
     load();const iv=setInterval(load,30000);return()=>clearInterval(iv);
   },[]);
@@ -617,118 +588,43 @@ function ArchiveTab({data,save,iC,sI,rmI}){
 /* ── Status-based Popup System ── */
 const STATUS_KEY='happiness-popup-state';
 
-/* ── TodayWorkTime: 세 트래커 합산 오늘 작업시간 ── */
+/* ── TodayWorkTime: Firebase에서 트래커 데이터 읽기 ── */
 function TodayWorkTime({onClick}){
   const[total,setTotal]=useState(0);
   useEffect(()=>{
-    const fmtTW=s=>{if(s<60)return'0m';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}h ${m}m`:`${m}m`};
     const todayStr=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 
-    const readCommission=()=>{
-      try{const raw=localStorage.getItem('commission-tracker-data');if(!raw)return 0;
-        const d=JSON.parse(raw);let sec=0;const now=new Date();now.setHours(0,0,0,0);
-        const ts=now.getTime(),te=ts+86400000;
-        (d.commissions||[]).forEach(c=>(c.sessions||[]).forEach(s=>{if(s.date>=ts&&s.date<te)sec+=s.duration||0}));
-        return sec;
-      }catch{return 0}
-    };
-
-    const readDoujinshi=()=>new Promise(res=>{
-      try{const rq=indexedDB.open('doujinshi-tracker-db');
-        rq.onupgradeneeded=()=>{rq.transaction.abort()};
-        rq.onerror=()=>res(0);rq.onblocked=()=>res(0);
-        rq.onsuccess=e=>{const db=e.target.result;
-          try{if(!db.objectStoreNames.contains('projects')){db.close();return res(0)}
-            const tx=db.transaction('projects','readonly');
-            const r=tx.objectStore('projects').get('dailyLog');
-            r.onsuccess=ev=>{db.close();const rec=ev.target.result;
-              const log=rec&&rec.value?rec.value:{};res(log[todayStr()]||0)};
-            r.onerror=()=>{db.close();res(0)};
-          }catch{db.close();res(0)}};
-      }catch{res(0)}
-    });
-
-    const readNovel=()=>new Promise(res=>{
-      try{const rq=indexedDB.open('novel-tracker-db');
-        rq.onupgradeneeded=()=>{rq.transaction.abort()};
-        rq.onerror=()=>res(0);rq.onblocked=()=>res(0);
-        rq.onsuccess=e=>{const db=e.target.result;
-          try{if(!db.objectStoreNames.contains('store')){db.close();return res(0)}
-            const tx=db.transaction('store','readonly');
-            const r=tx.objectStore('store').get('dailyLog');
-            r.onsuccess=ev=>{db.close();const rec=ev.target.result;
-              const log=rec&&rec.value?rec.value:{};res(log[todayStr()]||0)};
-            r.onerror=()=>{db.close();res(0)};
-          }catch{db.close();res(0)}};
-      }catch{res(0)}
-    });
-
-    const readManual=async()=>{
-      try{const db=await new Promise((res,rej)=>{const r=indexedDB.open('CharHappyCal',1);r.onupgradeneeded=()=>{r.transaction.abort()};r.onerror=()=>rej();r.onblocked=()=>rej();r.onsuccess=()=>res(r.result)});
-        const tx=db.transaction('meta','readonly');const rq=tx.objectStore('meta').get('manualLog');
-        return new Promise(res=>{rq.onsuccess=()=>{db.close();const log=rq.result||{};const entry=log[todayStr()]||{};res((entry.dev||0)+(entry.etc||0))};rq.onerror=()=>{db.close();res(0)}});
-      }catch{return 0}
-    };
-
-    const readRemoteManual=async()=>{
-      try{const doc=await fireDb.collection('remoteManualLog').doc(todayStr()).get();
-        if(!doc.exists)return 0;const d=doc.data();return(d.dev||0)+(d.etc||0);
-      }catch{return 0}
-    };
-
-    // 동인지 트래커에서 작업량(만화 페이지 + 글쓰기) 읽기
-    const readDoujinshiOutput=()=>new Promise(res=>{
-      try{const rq=indexedDB.open('doujinshi-tracker-db');
-        rq.onupgradeneeded=()=>{rq.transaction.abort()};
-        rq.onerror=()=>res({});rq.onblocked=()=>res({});
-        rq.onsuccess=e=>{const db=e.target.result;
-          try{if(!db.objectStoreNames.contains('projects')){db.close();return res({})}
-            const tx=db.transaction('projects','readonly');
-            const r=tx.objectStore('projects').get('data');
-            r.onsuccess=ev=>{db.close();
-              const prjs=ev.target.result&&ev.target.result.value?ev.target.result.value:[];
-              const tk=todayStr();let conti=0,rough=0,artwork=0,wPages=0,wChars=0;
-              prjs.forEach(p=>{
-                if(p.category==='manga'){
-                  // 만화: doneDate가 오늘인 페이지 수
-                  (p.conti||[]).forEach(pg=>{if(pg.done&&pg.doneDate===tk)conti++});
-                  (p.rough||[]).forEach(pg=>{if(pg.done&&pg.doneDate===tk)rough++});
-                  (p.artwork||[]).forEach(pg=>{if(pg.done&&pg.doneDate===tk)artwork++});
-                } else if(p.category==='novel'){
-                  // 글쓰기: writingLogs에서 오늘 합산
-                  (p.writingLogs||[]).forEach(l=>{if(l.date===tk){
-                    if(p.writingUnit==='pages')wPages+=l.amount;else wChars+=l.amount;
-                  }});
-                }
-              });
-              res({dojConti:conti,dojRough:rough,dojArtwork:artwork,dojWritingPages:wPages,dojWritingChars:wChars});
-            };
-            r.onerror=()=>{db.close();res({})};
-          }catch{db.close();res({})}};
-      }catch{res({})}
-    });
-
-    // 소설 트래커에서 일일 글자수 읽기
-    const readNovelOutput=()=>new Promise(res=>{
-      try{const rq=indexedDB.open('novel-tracker-db');
-        rq.onupgradeneeded=()=>{rq.transaction.abort()};
-        rq.onerror=()=>res(0);rq.onblocked=()=>res(0);
-        rq.onsuccess=e=>{const db=e.target.result;
-          try{if(!db.objectStoreNames.contains('store')){db.close();return res(0)}
-            const tx=db.transaction('store','readonly');
-            const r=tx.objectStore('store').get('dailyWritingLog');
-            r.onsuccess=ev=>{db.close();const log=ev.target.result&&ev.target.result.value?ev.target.result.value:{};res(log[todayStr()]||0)};
-            r.onerror=()=>{db.close();res(0)};
-          }catch{db.close();res(0)}};
-      }catch{res(0)}
-    });
-
     const update=async()=>{
-      const[c,d,n,m,rm,dojOut,novelChars]=await Promise.all([Promise.resolve(readCommission()),readDoujinshi(),readNovel(),readManual(),readRemoteManual(),readDoujinshiOutput(),readNovelOutput()]);
-      setTotal(c+d+n+m+rm);
-      syncToFirebase(todayStr(),{comm:c,doj:d,novel:n,manual:m,total:c+d+n+m,updatedAt:Date.now(),
-        workOutput:{dojConti:dojOut.dojConti||0,dojRough:dojOut.dojRough||0,dojArtwork:dojOut.dojArtwork||0,dojWritingPages:dojOut.dojWritingPages||0,dojWritingChars:dojOut.dojWritingChars||0,novelChars:novelChars}
-      });
+      try{
+        const tk=todayStr();
+        const[commDoc,novelDoc,rmDoc,dojDoc]=await Promise.all([
+          fireDb.collection('trackerSync').doc('commission').get(),
+          fireDb.collection('trackerSync').doc('novel').get(),
+          fireDb.collection('remoteManualLog').doc(tk).get(),
+          fireDb.collection('trackerSync').doc('doujinshi').get()
+        ]);
+        // 커미션 작업시간
+        let comm=0,doodle=0;
+        if(commDoc.exists){const dl=commDoc.data().dailyLog||{};const entry=dl[tk]||{};comm=entry.comm||0;doodle=entry.doodle||0}
+        // 동인지 작업시간
+        let doj=0;
+        if(dojDoc.exists){const dl=dojDoc.data().dailyLog||{};doj=dl[tk]||0}
+        // 소설 작업시간
+        let novel=0,novelChars=0;
+        if(novelDoc.exists){const nd=novelDoc.data();const dl=nd.dailyLog||{};novel=dl[tk]||0;const wl=nd.dailyWritingLog||{};novelChars=wl[tk]||0}
+        // 수동 기록
+        let rm=0;
+        if(rmDoc.exists){const d=rmDoc.data();rm=(d.dev||0)+(d.etc||0)}
+        // 동인지 작업량(페이지 등)
+        let dojOut={dojConti:0,dojRough:0,dojArtwork:0,dojWritingPages:0,dojWritingChars:0};
+        if(dojDoc.exists){const wo=dojDoc.data().workOutput||{};const entry=wo[tk]||{};dojOut={dojConti:entry.conti||0,dojRough:entry.rough||0,dojArtwork:entry.artwork||0,dojWritingPages:entry.wPages||0,dojWritingChars:entry.wChars||0}}
+
+        const t=comm+doodle+doj+novel+rm;
+        setTotal(t);
+        syncToFirebase(tk,{comm,doodle,doj,novel,manual:0,total:comm+doodle+doj+novel,updatedAt:Date.now(),
+          workOutput:{...dojOut,novelChars}
+        });
+      }catch(e){console.warn('TodayWorkTime update failed:',e)}
     };
     update();const iv=setInterval(update,15000);return()=>clearInterval(iv);
   },[]);
@@ -882,58 +778,32 @@ function StatsTab(){
   const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const todayStr=dateKey(new Date());
 
-  const saveManualLog=async(log)=>{try{await idbPut('meta','manualLog',log)}catch(e){console.error(e)}};
+  const saveManualLog=async(log)=>{
+    try{await idbPut('meta','manualLog',log)}catch(e){console.error(e)}
+    try{fireDb.collection('trackerSync').doc('manualLog').set({data:log,updatedAt:Date.now()},{merge:true})}catch(e){}
+  };
 
   useEffect(()=>{
-    const loadComm=()=>{
-      try{const raw=localStorage.getItem('commission-tracker-data');if(!raw)return{comm:{},doodle:{}};
-        const d=JSON.parse(raw);const comm={},doodle={};
-        const ctypes=d.customTypes||[];
-        const checkDoodle=t=>{const ct=ctypes.find(x=>x.name===t);return ct?ct.category==='doodle':t&&t.indexOf('낙서:')===0};
-        (d.commissions||[]).forEach(c=>{
-          const target=checkDoodle(c.type)?doodle:comm;
-          (c.sessions||[]).forEach(s=>{
-            const dt=new Date(s.date);const k=dateKey(dt);target[k]=(target[k]||0)+(s.duration||0);
-          });
-        });return{comm,doodle};
-      }catch{return{comm:{},doodle:{}}}
+    const loadFromFirebase=async()=>{
+      const comm={},doodle={},doj={},novel={};
+      let ml={},rml={};
+      try{
+        const[commDoc,dojDoc,novelDoc,mlDoc,rmSnap]=await Promise.all([
+          fireDb.collection('trackerSync').doc('commission').get(),
+          fireDb.collection('trackerSync').doc('doujinshi').get(),
+          fireDb.collection('trackerSync').doc('novel').get(),
+          fireDb.collection('trackerSync').doc('manualLog').get(),
+          fireDb.collection('remoteManualLog').get()
+        ]);
+        if(commDoc.exists){const dl=commDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{comm[k]=v.comm||0;doodle[k]=v.doodle||0})}
+        if(dojDoc.exists){const dl=dojDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{doj[k]=v})}
+        if(novelDoc.exists){const dl=novelDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{novel[k]=v})}
+        if(mlDoc.exists){ml=mlDoc.data().data||{}}
+        rmSnap.forEach(doc=>{rml[doc.id]=doc.data()});
+      }catch(e){console.warn('Firebase load failed:',e)}
+      setCommLog(comm);setDoodleLog(doodle);setDojLog(doj);setNovelLog(novel);setManualLog(ml);setRemoteManLog(rml);
     };
-    const loadDoj=()=>new Promise(res=>{
-      try{const rq=indexedDB.open('doujinshi-tracker-db');
-        rq.onupgradeneeded=()=>{rq.transaction.abort()};
-        rq.onerror=()=>res({});rq.onblocked=()=>res({});
-        rq.onsuccess=e=>{const db=e.target.result;
-          try{if(!db.objectStoreNames.contains('projects')){db.close();return res({})}
-            const tx=db.transaction('projects','readonly');
-            const r=tx.objectStore('projects').get('dailyLog');
-            r.onsuccess=ev=>{db.close();const rec=ev.target.result;res(rec&&rec.value?rec.value:{})};
-            r.onerror=()=>{db.close();res({})};
-          }catch{db.close();res({})}};
-      }catch{res({})}
-    });
-    const loadNovel=()=>new Promise(res=>{
-      try{const rq=indexedDB.open('novel-tracker-db');
-        rq.onupgradeneeded=()=>{rq.transaction.abort()};
-        rq.onerror=()=>res({});rq.onblocked=()=>res({});
-        rq.onsuccess=e=>{const db=e.target.result;
-          try{if(!db.objectStoreNames.contains('store')){db.close();return res({})}
-            const tx=db.transaction('store','readonly');
-            const r=tx.objectStore('store').get('dailyLog');
-            r.onsuccess=ev=>{db.close();const rec=ev.target.result;res(rec&&rec.value?rec.value:{})};
-            r.onerror=()=>{db.close();res({})};
-          }catch{db.close();res({})}};
-      }catch{res({})}
-    });
-    const loadManual=async()=>{try{const v=await idbGet('meta','manualLog');return v||{}}catch{return{}}};
-    const loadRemoteManual=async()=>{
-      try{const snap=await fireDb.collection('remoteManualLog').get();
-        const log={};snap.forEach(doc=>{log[doc.id]=doc.data()});return log;
-      }catch{return{}}
-    };
-    (async()=>{
-      const[cd,d,n,ml,rml]=await Promise.all([Promise.resolve(loadComm()),loadDoj(),loadNovel(),loadManual(),loadRemoteManual()]);
-      setCommLog(cd.comm);setDoodleLog(cd.doodle);setDojLog(d);setNovelLog(n);setManualLog(ml);setRemoteManLog(rml);
-    })();
+    loadFromFirebase();
   },[]);
 
   const addManual=()=>{
