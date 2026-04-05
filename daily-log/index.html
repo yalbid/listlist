@@ -269,8 +269,8 @@ function WorkStatsTab() {
       const base = (monthData && monthData[key]) || {};
       const rm = remoteManAll[key] || {};
       const comm = base.comm || 0, doodle = base.doodle || 0, doj = base.doj || 0, novel = base.novel || 0;
-      const dev = (base.dev || 0) + (rm.dev || 0), etc = (base.etc || 0) + (rm.etc || 0);
-      const total = (base.total || 0) + (rm.dev || 0) + (rm.etc || 0);
+      const dev = (base.dev || 0), etc = (base.etc || 0);
+      const total = (base.total || 0);
       cells.push({ day: d, key, comm, doodle, doj, novel, dev, etc, total });
     }
     return cells;
