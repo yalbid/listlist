@@ -287,6 +287,10 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
+/* SW 등록 */
+let swReg=null;
+if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js").then(r=>{swReg=r}).catch(()=>{})}
+
 const{useState,useEffect,useRef,useCallback,useMemo}=React;
 const gid=()=>Date.now().toString(36)+Math.random().toString(36).substr(2,6);
 function sr(seed){let h=0;for(let i=0;i<seed.length;i++)h=Math.imul(31,h)+seed.charCodeAt(i)|0;return()=>{h=Math.imul(h^(h>>>16),0x45d9f3b);h=Math.imul(h^(h>>>13),0x45d9f3b);return((h^(h>>>16))>>>0)/4294967296}}
@@ -742,7 +746,7 @@ function PopupToast({data,iC}){
           startBlink(ch?.name);
           playChime();
           if(Notification.permission==='granted'){
-            try{new Notification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup'})}catch(e){}
+            try{if(swReg){swReg.showNotification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup'});}else{new Notification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup'});}}catch(e){}
           }
         }else{showPopup(ln.text,ch)}
         setPS({lastTrigger:now,nextInterval:(20+Math.random()*20)*60});
