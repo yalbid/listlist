@@ -623,7 +623,7 @@ function TodayWorkTime({onClick}){
         let dojOut={dojConti:0,dojRough:0,dojArtwork:0,dojWritingPages:0,dojWritingChars:0};
         if(dojDoc.exists){const wo=dojDoc.data().workOutput||{};const entry=wo[tk]||{};dojOut={dojConti:entry.conti||0,dojRough:entry.rough||0,dojArtwork:entry.artwork||0,dojWritingPages:entry.wPages||0,dojWritingChars:entry.wChars||0}}
 
-        const t=comm+doodle+doj+novel+rm+manual;
+        const t=comm+doodle+doj+novel+manual;
         setTotal(t);
         syncToFirebase(tk,{comm,doodle,doj,novel,manual,total:comm+doodle+doj+novel+manual,updatedAt:Date.now(),
           workOutput:{...dojOut,novelChars}
@@ -828,7 +828,7 @@ function StatsTab(){
   };
   const getManualLocal=(key,cat)=>(manualLog[key]&&manualLog[key][cat])||0;
   const getManualRemote=(key,cat)=>(remoteManLog[key]&&remoteManLog[key][cat])||0;
-  const getManual=(key,cat)=>getManualLocal(key,cat)+getManualRemote(key,cat);
+  const getManual=(key,cat)=>getManualLocal(key,cat);
 
   const prevMonth=()=>{setSelDay(null);setMonth(p=>p.m===0?{y:p.y-1,m:11}:{y:p.y,m:p.m-1})};
   const nextMonth=()=>{setSelDay(null);setMonth(p=>p.m===11?{y:p.y+1,m:0}:{y:p.y,m:p.m+1})};
