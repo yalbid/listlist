@@ -781,9 +781,9 @@ function StatsTab(){
   useEffect(()=>{
     const loadFromFirebase=async()=>{
       const comm={},doodle={},doj={},novel={};
-      let ml={},rml={};
+      let rml={};
       try{
-        const[commDoc,dojDoc,novelDoc,mlDoc,rmSnap]=await Promise.all([
+        const[commDoc,dojDoc,novelDoc,rmSnap]=await Promise.all([
           fireDb.collection('trackerSync').doc('commission').get(),
           fireDb.collection('trackerSync').doc('doujinshi').get(),
           fireDb.collection('trackerSync').doc('novel').get(),
@@ -792,10 +792,10 @@ function StatsTab(){
         if(commDoc.exists){const dl=commDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{comm[k]=v.comm||0;doodle[k]=v.doodle||0})}
         if(dojDoc.exists){const dl=dojDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{doj[k]=v})}
         if(novelDoc.exists){const dl=novelDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{novel[k]=v})}
-        if(mlDoc.exists){ml=mlDoc.data().data||{}}
+        
         rmSnap.forEach(doc=>{rml[doc.id]=doc.data()});
       }catch(e){console.warn('Firebase load failed:',e)}
-      setCommLog(comm);setDoodleLog(doodle);setDojLog(doj);setNovelLog(novel);setManualLog(ml);setRemoteManLog(rml);
+      setCommLog(comm);setDoodleLog(doodle);setDojLog(doj);setNovelLog(novel);setRemoteManLog(rml);
     };
     loadFromFirebase();
   },[]);
