@@ -738,7 +738,7 @@ function PopupToast({data,iC}){
           startBlink(ch?.name);
           playChime();
           if(Notification.permission==='granted'){
-            try{new Notification(ch?.name||'캐릭터',{body:ln.text,icon:'📖',tag:'happiness-popup'})}catch(e){}
+            try{new Notification((ch?.name||'캐릭터')+' 💬',{body:ln.text,tag:'happiness-popup'})}catch(e){}
           }
         }else{showPopup(ln.text,ch)}
         setPS({lastTrigger:now,nextInterval:(20+Math.random()*20)*60});
@@ -781,6 +781,14 @@ function StatsTab(){
   const saveManualLog=async(log)=>{
     try{await idbPut('meta','manualLog',log)}catch(e){console.error(e)}
     try{fireDb.collection('trackerSync').doc('manualLog').set({data:log,updatedAt:Date.now()},{merge:true})}catch(e){}
+    // daily-log가 읽는 remoteManualLog에도 동기화
+    try{
+      const batch=fireDb.batch();
+      Object.entries(log).forEach(([dateKey,entry])=>{
+        batch.set(fireDb.collection('remoteManualLog').doc(dateKey),entry,{merge:true});
+      });
+      batch.commit();
+    }catch(e){console.warn('remoteManualLog sync failed:',e)}
   };
 
   useEffect(()=>{
