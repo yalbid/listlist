@@ -64,6 +64,12 @@ function getToday() {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+function getTodayForLog() {
+  const d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
 function formatTime(ts) {
   const d = new Date(ts);
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
@@ -499,7 +505,7 @@ function AuthGate({children}){
   return children;
 }
 function DailyLog() {
-  const today = getToday();
+  const today = getTodayForLog();
   const [entries, setEntries] = useState(() => loadEntries(today));
   const [selectedCat, setSelectedCat] = useState(null);
   const [memo, setMemo] = useState("");
