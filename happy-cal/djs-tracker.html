@@ -1,0 +1,2733 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>동인지 아카이브 & 제작 트래커</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #f6f3ee;
+    --bg-card: #ffffff;
+    --bg-hover: #faf8f5;
+    --text: #2c2825;
+    --text-sub: #7a7168;
+    --text-light: #a89f94;
+    --accent: #c47a5a;
+    --accent-light: #f0d9cc;
+    --accent-dark: #a05e3f;
+    --border: #e5ded5;
+    --border-light: #efe9e1;
+    --green: #6a9e78;
+    --green-light: #e0eddf;
+    --blue: #5a7fa0;
+    --blue-light: #dce6ef;
+    --red: #c45a5a;
+    --red-light: #f0d0d0;
+    --shadow: 0 1px 3px rgba(44,40,37,0.06);
+    --shadow-md: 0 4px 12px rgba(44,40,37,0.08);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  [data-theme="dark"] {
+    --bg: #1a1525;
+    --bg-card: #231e30;
+    --bg-hover: #2c2640;
+    --text: #e8e2f0;
+    --text-sub: #9d93b0;
+    --text-light: #6e6482;
+    --accent: #a78bda;
+    --accent-light: #352d4a;
+    --accent-dark: #c4aef0;
+    --border: #352d4a;
+    --border-light: #2c2640;
+    --green: #7bc48e;
+    --green-light: #1e2e24;
+    --blue: #7ba4c8;
+    --blue-light: #1e2834;
+    --red: #d47272;
+    --red-light: #3a2020;
+    --shadow: 0 1px 3px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Zen Maru Gothic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .header h1 {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  .header h1 span { color: var(--accent); }
+
+  .nav-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    padding: 3px;
+    border-radius: 8px;
+  }
+
+  .nav-tab {
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active {
+    background: var(--bg-card);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .today-time {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: 5px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    letter-spacing: -0.2px;
+  }
+
+  .today-time.recording {
+    animation: pulse-soft 2s infinite;
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .btn {
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: white; }
+
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-danger { color: var(--red); }
+  .btn-danger:hover { border-color: var(--red); color: var(--red); }
+
+  .main { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Project Grid */
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .project-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: var(--shadow);
+  }
+
+  .project-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-light);
+    transform: translateY(-1px);
+  }
+
+  .project-card-cover {
+    width: 100%;
+    aspect-ratio: 5 / 7;
+    background: var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 13px;
+    overflow: hidden;
+  }
+
+  .project-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+  .project-card-body { padding: 10px 12px; }
+
+  .project-card-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .project-card-meta {
+    font-size: 11px;
+    color: var(--text-sub);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .project-card-progress {
+    margin-top: 10px;
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .project-card-progress-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  .add-card {
+    border: 2px dashed var(--border);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+    cursor: pointer;
+    border-radius: var(--radius);
+    color: var(--text-light);
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: none;
+  }
+
+  .add-card:hover { border-color: var(--accent); color: var(--accent); background: var(--bg-hover); }
+
+  .section-label {
+    grid-column: 1 / -1;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-sub);
+    padding: 8px 0 4px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 4px;
+  }
+
+  /* Detail */
+  .detail-header { display: flex; gap: 20px; margin-bottom: 24px; }
+
+  .detail-cover {
+    width: 160px;
+    min-height: 200px;
+    background: var(--border-light);
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 12px;
+    cursor: pointer;
+    border: 2px dashed var(--border);
+    transition: border-color 0.2s;
+  }
+
+  .detail-cover:hover { border-color: var(--accent); }
+  .detail-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .detail-cover.has-image { border-style: solid; }
+
+  .detail-info { flex: 1; }
+
+  .detail-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .detail-title {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Zen Maru Gothic', sans-serif;
+  }
+
+  .detail-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--text-sub);
+    margin-bottom: 12px;
+    align-items: center;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .badge-event { background: var(--blue-light); color: var(--blue); }
+  .badge-mailorder { background: var(--accent-light); color: var(--accent-dark); }
+  .badge-manga { background: var(--accent-light); color: var(--accent-dark); }
+  .badge-novel { background: var(--blue-light); color: var(--blue); }
+
+  /* Deadlines section */
+  .deadlines-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .deadlines-grid .form-group { margin-bottom: 0; }
+  .deadlines-grid label { font-size: 12px; color: var(--text-light); margin-bottom: 4px; display: block; }
+  .deadlines-grid input[type="date"] { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 13px; }
+  .deadline-section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 12px; margin-bottom: 2px; }
+
+  /* Daily goals */
+  .daily-goals { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .daily-goals-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .daily-goals-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .daily-goals-date { font-size: 11px; color: var(--text-light); }
+  .daily-goals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .goal-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .goal-item.achieved { background: var(--green-light, rgba(40,167,69,0.08)); border-color: var(--green); }
+  .goal-label { font-size: 11px; color: var(--text-light); margin-bottom: 6px; }
+  .goal-input { width: 100%; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; text-align: center; background: var(--bg); color: var(--text); }
+  .goal-progress { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+  .goal-progress .done { color: var(--green); font-weight: 600; }
+
+  /* Goal progress bar */
+  .goal-bar-wrap { margin-top: 6px; background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+  .goal-bar { height: 100%; border-radius: 4px; transition: width 0.3s ease; background: var(--accent); }
+  .goal-bar.complete { background: var(--green); }
+  .goal-today { font-size: 11px; color: var(--text-light); margin-top: 3px; text-align: center; }
+  .goal-today .highlight { color: var(--green); font-weight: 600; }
+
+  /* Deadline badges in detail meta */
+  .deadline-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .dl-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 500; }
+  .dl-badge-conti { background: rgba(66,133,244,0.12); color: #4285F4; }
+  .dl-badge-rough { background: rgba(52,168,83,0.12); color: #34A853; }
+  .dl-badge-artwork { background: rgba(251,188,4,0.12); color: #E8A000; }
+  .dl-badge-review { background: rgba(156,39,176,0.12); color: #9C27B0; }
+  .dl-badge-submission { background: rgba(234,67,53,0.12); color: #EA4335; }
+
+  /* Full Calendar */
+  .full-cal-container { max-width: 700px; margin: 0 auto; }
+  .full-cal-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+  .full-cal-nav button { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+  .full-cal-nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .full-cal-nav .cal-month-label { font-size: 18px; font-weight: 700; min-width: 140px; text-align: center; }
+  .full-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 20px; }
+  .full-cal-dow { text-align: center; font-size: 12px; color: var(--text-light); padding: 6px 0; font-weight: 600; }
+  .full-cal-cell { min-height: 72px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px; position: relative; }
+  .full-cal-cell.empty { background: transparent; border-color: transparent; }
+  .full-cal-cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .full-cal-cell.past { opacity: 0.5; }
+  .full-cal-day-num { font-size: 11px; font-weight: 600; color: var(--text-light); margin-bottom: 2px; }
+  .full-cal-cell.today .full-cal-day-num { color: var(--accent); }
+  .full-cal-item { font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; line-height: 1.5; }
+  .full-cal-item.type-conti { background: rgba(66,133,244,0.15); color: #4285F4; }
+  .full-cal-item.type-rough { background: rgba(52,168,83,0.15); color: #34A853; }
+  .full-cal-item.type-artwork { background: rgba(251,188,4,0.15); color: #E8A000; }
+  .full-cal-item.type-review { background: rgba(156,39,176,0.15); color: #9C27B0; }
+  .full-cal-item.type-submission { background: rgba(234,67,53,0.15); color: #EA4335; }
+  .full-cal-item.type-publish { background: rgba(232,148,90,0.15); color: var(--accent); }
+  .full-cal-work { font-size: 9px; display: flex; gap: 3px; flex-wrap: wrap; margin-top: 1px; }
+  .full-cal-work-tag { padding: 0px 3px; border-radius: 2px; line-height: 1.5; }
+  .full-cal-work-tag.wt-conti { background: rgba(66,133,244,0.1); color: #4285F4; }
+  .full-cal-work-tag.wt-rough { background: rgba(52,168,83,0.1); color: #34A853; }
+  .full-cal-work-tag.wt-artwork { background: rgba(251,188,4,0.1); color: #E8A000; }
+  .full-cal-work-tag.wt-time { background: var(--bg); color: var(--text-light); }
+  .full-cal-cell.fc-selected { border-color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
+  .full-cal-detail { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
+  .full-cal-detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .full-cal-detail-date { font-size: 14px; font-weight: 600; }
+  .full-cal-detail-close { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+  .full-cal-detail-close:hover { color: var(--text); background: var(--border-light); }
+  .full-cal-detail-project { margin-bottom: 10px; }
+  .full-cal-detail-project:last-child { margin-bottom: 0; }
+  .full-cal-detail-pname { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .full-cal-detail-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; }
+  .full-cal-detail-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .full-cal-detail-label { color: var(--text-sub); flex: 1; }
+  .full-cal-detail-val { font-weight: 600; }
+  .full-cal-detail-empty { font-size: 12px; color: var(--text-light); text-align: center; padding: 8px 0; }
+  .full-cal-detail-total { display: flex; gap: 12px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border-light); font-size: 12px; color: var(--text-sub); }
+  .full-cal-legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 12px; }
+  .full-cal-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-light); }
+  .full-cal-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  .summary-row { display: flex; gap: 12px; margin-bottom: 20px; }
+
+  .summary-card {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .summary-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Zen Maru Gothic', sans-serif;
+    color: var(--accent);
+  }
+
+  .summary-label { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+
+  .detail-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .detail-tab {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-sub);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+    margin-bottom: -1px;
+  }
+
+  .detail-tab:hover { color: var(--text); }
+  .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .detail-panel { display: none; }
+  .detail-panel.active { display: block; }
+
+  /* Tracking */
+  .tracking-section { margin-bottom: 24px; }
+
+  .tracking-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .tracking-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tracking-section-title .count { font-size: 12px; font-weight: 400; color: var(--text-sub); }
+
+  .plot-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .plot-left { display: flex; align-items: center; gap: 12px; }
+
+  .tracking-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .tracking-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-hover);
+  }
+
+  .tracking-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .tracking-table tr:last-child td { border-bottom: none; }
+  .tracking-table tr:hover td { background: var(--bg-hover); }
+
+  .check-btn {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .check-btn:hover { border-color: var(--green); }
+  .check-btn.checked { background: var(--green); border-color: var(--green); color: white; }
+  .check-btn.checked::after { content: '✓'; font-size: 12px; font-weight: 700; }
+
+  .time-display {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--text-sub);
+    min-width: 70px;
+    display: inline-block;
+  }
+
+  .time-btn {
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.2s;
+    color: var(--text-sub);
+  }
+
+  .time-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .time-btn.recording { background: var(--red-light); border-color: var(--red); color: var(--red); animation: pulse 1.5s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  /* Reviews */
+  .review-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+
+  .review-item:hover { border-color: var(--border); }
+
+  .review-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; margin-bottom: 6px; }
+
+  .review-meta { font-size: 11px; color: var(--text-light); display: flex; gap: 12px; }
+
+  .review-delete {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .review-item:hover .review-delete { opacity: 1; }
+  .review-delete:hover { color: var(--red); }
+
+  .review-form { margin-top: 12px; }
+
+  .review-form textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .review-form textarea:focus { border-color: var(--accent); }
+
+  .review-form-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+  }
+
+  .review-form-row input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .review-form-row input:focus { border-color: var(--accent); }
+
+  /* Pomodoro */
+  .pomodoro {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    padding: 16px 20px;
+    z-index: 200;
+    min-width: 200px;
+    text-align: center;
+  }
+
+  .pomodoro-label {
+    font-size: 11px;
+    color: var(--text-light);
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .pomodoro-time {
+    font-size: 36px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-family: 'Zen Maru Gothic', sans-serif;
+    line-height: 1.2;
+  }
+
+  .pomodoro-time.break-mode { color: var(--green); }
+  .pomodoro-time.work-mode { color: var(--accent); }
+
+  .pomodoro-controls {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .pomo-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+    color: var(--text-sub);
+  }
+
+  .pomo-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .pomo-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  .pomodoro-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    box-shadow: var(--shadow-md);
+    z-index: 199;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+
+  .pomodoro-toggle:hover { transform: scale(1.05); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(44,40,37,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .modal-overlay.show { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 28px;
+    width: 90%;
+    max-width: 480px;
+    box-shadow: 0 20px 60px rgba(44,40,37,0.15);
+    transform: translateY(10px);
+    transition: transform 0.2s;
+  }
+
+  .modal-overlay.show .modal { transform: translateY(0); }
+
+  .modal h2 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    font-family: 'Zen Maru Gothic', sans-serif;
+  }
+
+  .form-group { margin-bottom: 14px; }
+
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-sub);
+    margin-bottom: 5px;
+  }
+
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    background: var(--bg-card);
+    color: var(--text);
+  }
+
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border: none;
+    background: none;
+    color: var(--text-sub);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    transition: color 0.2s;
+    margin-bottom: 16px;
+  }
+
+  .back-btn:hover { color: var(--accent); }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-light);
+    font-size: 14px;
+  }
+
+  .confirm-text { font-size: 14px; line-height: 1.7; color: var(--text-sub); }
+
+  .notification {
+    position: fixed;
+    top: 70px;
+    right: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    box-shadow: var(--shadow-md);
+    z-index: 400;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+
+  .notification.show { opacity: 1; transform: translateX(0); }
+
+  .hidden { display: none !important; }
+
+  /* Project Calendar */
+  .pcal-container { max-width: 600px; margin: 0 auto; }
+  .pcal-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 14px; }
+  .pcal-nav button { border: 1px solid var(--border); background: var(--bg-card); color: var(--text); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .pcal-nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .pcal-nav .pcal-month { font-size: 16px; font-weight: 700; min-width: 120px; text-align: center; }
+  .pcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .pcal-dow { text-align: center; font-size: 11px; color: var(--text-light); padding: 4px 0; font-weight: 600; }
+  .pcal-cell { min-height: 64px; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 6px; padding: 4px; cursor: pointer; transition: all 0.15s; position: relative; }
+  .pcal-cell:hover { border-color: var(--accent); }
+  .pcal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+  .pcal-cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .pcal-cell.selected { border-color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
+  .pcal-cell.has-work { background: var(--accent-light); }
+  .pcal-day { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+  .pcal-dots { display: flex; gap: 2px; flex-wrap: wrap; }
+  .pcal-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .pcal-dot.conti { background: var(--blue); }
+  .pcal-dot.rough { background: var(--green); }
+  .pcal-dot.artwork { background: var(--accent); }
+  .pcal-time { font-size: 9px; color: var(--text-light); margin-top: 1px; }
+  .pcal-detail { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 12px; }
+  .pcal-detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .pcal-detail-date { font-size: 14px; font-weight: 600; }
+  .pcal-detail-close { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 14px; padding: 2px 6px; }
+  .pcal-detail-close:hover { color: var(--text); }
+  .pcal-detail-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+  .pcal-detail-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .pcal-detail-label { color: var(--text-sub); flex: 1; }
+  .pcal-detail-value { font-weight: 600; }
+  .pcal-legend { display: flex; gap: 12px; justify-content: center; margin-top: 10px; font-size: 11px; color: var(--text-sub); }
+  .pcal-legend-item { display: flex; align-items: center; gap: 4px; }
+  .pcal-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .pcal-stat { background: var(--bg); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+  .pcal-stat-value { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .pcal-stat-label { font-size: 11px; color: var(--text-light); }
+  .pcal-mode-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 14px; align-self: center; }
+  .pcal-mode-btn { padding: 5px 14px; font-size: 12px; border: none; cursor: pointer; font-family: inherit; background: var(--bg-card); color: var(--text-sub); transition: all 0.2s; }
+  .pcal-mode-btn.active { background: var(--accent); color: white; }
+  .pcal-hm-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .pcal-hm-cell { aspect-ratio: 1; border-radius: 4px; cursor: pointer; position: relative; transition: all 0.15s; }
+  .pcal-hm-cell.empty { background: transparent; cursor: default; }
+  .pcal-hm-cell.lv0 { background: var(--border-light); }
+  .pcal-hm-cell.lv1 { background: var(--accent-light); opacity: 0.8; }
+  .pcal-hm-cell.lv2 { background: var(--accent); opacity: 0.4; }
+  .pcal-hm-cell.lv3 { background: var(--accent); opacity: 0.7; }
+  .pcal-hm-cell.lv4 { background: var(--accent); opacity: 0.85; }
+  .pcal-hm-cell.lv5 { background: var(--accent); opacity: 1; }
+  .pcal-hm-cell.today { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .pcal-hm-cell.selected { box-shadow: inset 0 0 0 2px var(--text); transform: scale(1.1); z-index: 2; }
+  .pcal-hm-tooltip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); font-size: 10px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; z-index: 10; pointer-events: none; }
+  .pcal-hm-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 8px; font-size: 10px; color: var(--text-light); }
+  .pcal-hm-legend-cell { width: 12px; height: 12px; border-radius: 2px; }
+  .pcal-hm-legend-cell.lv0 { background: var(--border-light); }
+  .pcal-hm-legend-cell.lv1 { background: var(--accent-light); opacity: 0.8; }
+  .pcal-hm-legend-cell.lv2 { background: var(--accent); opacity: 0.4; }
+  .pcal-hm-legend-cell.lv3 { background: var(--accent); opacity: 0.7; }
+  .pcal-hm-legend-cell.lv4 { background: var(--accent); opacity: 0.85; }
+  .pcal-hm-legend-cell.lv5 { background: var(--accent); opacity: 1; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>📖 <span>동인지</span> 트래커</h1>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showView('list')">프로젝트</button>
+      <button class="nav-tab" onclick="showView('calendar')">달력</button>
+      <button class="nav-tab" onclick="showView('archive')">아카이브</button>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="today-time" id="todayTime" title="오늘 누적 작업시간">⏱ 0m</div>
+    <button class="btn" id="themeToggle" onclick="toggleTheme()" title="테마 전환">🌙</button>
+    <button class="btn" onclick="exportData()">📁 내보내기</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">📂 불러오기</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<div class="main">
+  <div class="view active" id="view-list">
+    <div class="project-grid" id="projectGrid"></div>
+  </div>
+
+  <div class="view" id="view-archive">
+    <div class="project-grid" id="archiveGrid"></div>
+    <div class="empty-state" id="archiveEmpty">아직 완료된 프로젝트가 없어요.</div>
+  </div>
+
+  <div class="view" id="view-calendar">
+    <div class="full-cal-container" id="fullCalendar"></div>
+  </div>
+
+  <div class="view" id="view-detail">
+    <button class="back-btn" onclick="showView('list')">← 목록으로</button>
+    <div class="detail-header">
+      <div class="detail-cover" id="detailCover" onclick="uploadCover()">
+        <span id="coverPlaceholder">표지 추가</span>
+        <input type="file" id="coverInput" accept="image/*" style="display:none" onchange="handleCoverUpload(event)">
+      </div>
+      <div class="detail-info">
+        <div class="detail-title-row">
+          <div class="detail-title" id="detailTitle"></div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm" onclick="openEditProjectModal()">✏️ 수정</button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject()">🗑</button>
+          </div>
+        </div>
+        <div class="detail-meta" id="detailMeta"></div>
+        <div class="summary-row" id="detailSummary"></div>
+      </div>
+    </div>
+
+    <div class="detail-tabs">
+      <button class="detail-tab active" onclick="showDetailTab('tracking')">제작 트래킹</button>
+      <button class="detail-tab" onclick="showDetailTab('calendar')">달력</button>
+      <button class="detail-tab" onclick="showDetailTab('reviews')">감상 / 리뷰</button>
+    </div>
+
+    <div class="detail-panel active" id="panel-tracking"></div>
+    <div class="detail-panel" id="panel-calendar"></div>
+    <div class="detail-panel" id="panel-reviews"></div>
+  </div>
+</div>
+
+<button class="pomodoro-toggle" id="pomoToggle" onclick="togglePomodoro()">🍅</button>
+
+<div class="pomodoro hidden" id="pomoWidget">
+  <div class="pomodoro-label" id="pomoLabel">🍅 작업 시간</div>
+  <div class="pomodoro-time work-mode" id="pomoTime">25:00</div>
+  <div class="pomodoro-controls">
+    <button class="pomo-btn" onclick="pomoAction('start')" title="시작">▶</button>
+    <button class="pomo-btn" onclick="pomoAction('pause')" title="일시정지">⏸</button>
+    <button class="pomo-btn" onclick="pomoAction('reset')" title="리셋">↺</button>
+    <button class="pomo-btn" onclick="togglePomodoro()" title="닫기" style="font-size:11px;">✕</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ========== Firebase 동기화 ==========
+const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
+const _fbDb=_fbApp.firestore();
+
+function _syncDojToFirebase() {
+  try {
+    // 작업시간
+    _fbDb.collection('trackerSync').doc('doujinshi').set({
+      dailyLog: dailyLog,
+      workOutput: _buildWorkOutput(),
+      updatedAt: Date.now()
+    }, { merge: true }).catch(e => console.warn('Firebase sync failed:', e));
+    // 마감일정
+    const deadlines = [];
+    const isDone = p => { let t=0,d=0; if(p.plot){t++;if(p.plot.done)d++} ['conti','rough','artwork'].forEach(ph=>{if(p[ph])p[ph].forEach(pg=>{t++;if(pg.done)d++})}); return t>0&&d>=t; };
+    projects.filter(p => !isDone(p) && p.deadlines).forEach(p => {
+      [{key:'conti',label:'콘티',type:'conti'},{key:'rough',label:'러프',type:'rough'},{key:'artwork',label:'작화',type:'artwork'},{key:'review',label:'퇴고',type:'review'},{key:'submission',label:'입고',type:'submission'}].forEach(dt => {
+        if(p.deadlines[dt.key]) deadlines.push({id:`dj-${p.id}-${dt.key}`,name:`${p.title} ${dt.label}`,deadline:p.deadlines[dt.key],type:dt.type});
+      });
+    });
+    _fbDb.collection('trackerSync').doc('deadlines_doujinshi').set({ items: deadlines, updatedAt: Date.now() }).catch(e => console.warn('Firebase deadline sync failed:', e));
+  } catch(e) { console.warn('Doujinshi Firebase sync error:', e); }
+}
+
+function _buildWorkOutput() {
+  const output = {};
+  const tk = key => key; // dateKey
+  projects.forEach(p => {
+    if(p.category==='manga'){
+      ['conti','rough','artwork'].forEach(phase => {
+        (p[phase]||[]).forEach(pg => {
+          if(pg.done && pg.doneDate){
+            if(!output[pg.doneDate]) output[pg.doneDate]={conti:0,rough:0,artwork:0,wPages:0,wChars:0};
+            output[pg.doneDate][phase]++;
+          }
+        });
+      });
+    } else if(p.category==='novel'){
+      (p.writingLogs||[]).forEach(l => {
+        if(!output[l.date]) output[l.date]={conti:0,rough:0,artwork:0,wPages:0,wChars:0};
+        if(p.writingUnit==='pages') output[l.date].wPages+=l.amount;
+        else output[l.date].wChars+=l.amount;
+      });
+    }
+  });
+  return output;
+}
+
+// ========== STATE ==========
+let projects = [];
+let currentProjectId = null;
+let activeTimers = {}; // key: 'projId-phase-page', value: { startTime }
+let dailyLog = {}; // key: 'YYYY-MM-DD', value: seconds
+
+// Pagination
+const PAGE_SIZE = 10;
+let completedPage = 1;
+let archivePage = 1;
+
+// Pomodoro
+let pomo = { running: false, timeLeft: 25 * 60, endTime: null, isBreak: false, interval: null };
+const WORK_MIN = 25;
+const BREAK_MIN = 5;
+
+// ========== THEME ==========
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  saveTheme(next);
+}
+
+function saveTheme(theme) {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({ key: 'theme', value: theme });
+  } catch(e) {}
+}
+
+function loadTheme() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get('theme');
+    req.onsuccess = () => {
+      if (req.result && req.result.value) applyTheme(req.result.value);
+    };
+  } catch(e) {}
+}
+
+// ========== STORAGE (IndexedDB) ==========
+const DB_NAME = 'doujinshi-tracker-db';
+const DB_VERSION = 1;
+const STORE_NAME = 'projects';
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+      }
+    };
+    request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+    request.onerror = (e) => { console.error('IndexedDB error:', e); reject(e); };
+  });
+}
+
+async function init() {
+  try {
+    await openDB();
+    loadTheme();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.get('data');
+    request.onsuccess = () => {
+      if (request.result && request.result.value) {
+        projects = request.result.value;
+        projects.forEach(p => { if (!p.category) p.category = 'manga'; });
+      }
+      renderProjectList();
+    };
+    const reqLog = store.get('dailyLog');
+    reqLog.onsuccess = () => {
+      if (reqLog.result && reqLog.result.value) {
+        dailyLog = reqLog.result.value;
+      }
+      updateTodayDisplay();
+    };
+    request.onerror = () => { renderProjectList(); };
+  } catch(e) {
+    console.error('Init error:', e);
+    try {
+      const saved = localStorage.getItem('doujinshi-tracker');
+      if (saved) { projects = JSON.parse(saved); save(); }
+    } catch(e2) {}
+    renderProjectList();
+  }
+  // Update today display every second (for active timers)
+  setInterval(updateTodayDisplay, 1000);
+}
+
+function save() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put({ key: 'data', value: projects });
+    tx.onerror = (e) => console.error('Save error:', e);
+    _syncDojToFirebase();
+  } catch(e) {
+    console.error('Save error:', e);
+  }
+}
+
+function saveDailyLog() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({ key: 'dailyLog', value: dailyLog });
+    _syncDojToFirebase();
+  } catch(e) {}
+}
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function logDailyTime(seconds) {
+  const key = todayKey();
+  dailyLog[key] = (dailyLog[key] || 0) + seconds;
+  saveDailyLog();
+  updateTodayDisplay();
+}
+
+function getTodayTotal() {
+  const saved = dailyLog[todayKey()] || 0;
+  // Add live timer elapsed if any timer is running
+  let live = 0;
+  Object.values(activeTimers).forEach(t => {
+    live += Math.floor((Date.now() - t.startTime) / 1000);
+  });
+  return saved + live;
+}
+
+function updateTodayDisplay() {
+  const el = document.getElementById('todayTime');
+  if (!el) return;
+  const total = getTodayTotal();
+  const hasActive = Object.keys(activeTimers).length > 0;
+  el.textContent = `⏱ 오늘 ${fmtTimeShort(total)}`;
+  el.classList.toggle('recording', hasActive);
+}
+
+function notify(msg) {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ========== VIEWS ==========
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+
+  if (name === 'list') {
+    document.getElementById('view-list').classList.add('active');
+    document.querySelectorAll('.nav-tab')[0].classList.add('active');
+    renderProjectList();
+  } else if (name === 'calendar') {
+    document.getElementById('view-calendar').classList.add('active');
+    document.querySelectorAll('.nav-tab')[1].classList.add('active');
+    renderFullCalendar();
+  } else if (name === 'archive') {
+    document.getElementById('view-archive').classList.add('active');
+    document.querySelectorAll('.nav-tab')[2].classList.add('active');
+    renderArchive();
+  } else if (name === 'detail') {
+    document.getElementById('view-detail').classList.add('active');
+    renderDetail();
+  }
+}
+
+// ========== PROJECT LIST ==========
+function getProgress(p) {
+  let total = 0, done = 0;
+  if (p.category === 'novel') {
+    ['plot','writing','proofreading'].forEach(k => { total++; if (p[k]?.done) done++; });
+  } else {
+    if (p.plot) { total++; if (p.plot.done) done++; }
+    ['conti','rough','artwork'].forEach(ph => {
+      if (p[ph]) p[ph].forEach(pg => { total++; if (pg.done) done++; });
+    });
+  }
+  return { total, done, pct: total > 0 ? Math.round(done / total * 100) : 0 };
+}
+
+function getTotalTime(p) {
+  let t = p.plot?.time || 0;
+  if (p.category === 'novel') {
+    t += p.writing?.time || 0;
+    t += p.proofreading?.time || 0;
+  } else {
+    ['conti','rough','artwork'].forEach(ph => {
+      if (p[ph]) p[ph].forEach(pg => { t += pg.time || 0; });
+    });
+  }
+  return t;
+}
+
+function fmtTime(sec) {
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (d > 0) return `${d}일 ${h}h ${String(m).padStart(2,'0')}m`;
+  if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2,'0')}s`;
+  return `${s}s`;
+}
+
+function fmtTimeShort(sec) {
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}일 ${h}h ${m}m`;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function makePagination(currentPage, totalPages, onPageChange) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:12px;padding:14px 0;font-size:13px';
+  const prevBtn = document.createElement('button');
+  prevBtn.textContent = '이전';
+  prevBtn.disabled = currentPage <= 1;
+  prevBtn.style.cssText = 'border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);padding:6px 14px;cursor:pointer;font-size:13px;font-family:inherit';
+  if (currentPage <= 1) prevBtn.style.opacity = '0.4';
+  prevBtn.onclick = function(e) { e.stopPropagation(); onPageChange(currentPage - 1); };
+  const info = document.createElement('span');
+  info.style.color = 'var(--sub)';
+  info.textContent = currentPage + ' / ' + totalPages;
+  const nextBtn = document.createElement('button');
+  nextBtn.textContent = '다음';
+  nextBtn.disabled = currentPage >= totalPages;
+  nextBtn.style.cssText = 'border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);padding:6px 14px;cursor:pointer;font-size:13px;font-family:inherit';
+  if (currentPage >= totalPages) nextBtn.style.opacity = '0.4';
+  nextBtn.onclick = function(e) { e.stopPropagation(); onPageChange(currentPage + 1); };
+  wrap.appendChild(prevBtn);
+  wrap.appendChild(info);
+  wrap.appendChild(nextBtn);
+  return wrap;
+}
+
+function renderProjectList() {
+  const grid = document.getElementById('projectGrid');
+  grid.innerHTML = '';
+
+  const inProgress = [];
+  const completed = [];
+
+  projects.forEach(p => {
+    const prog = getProgress(p);
+    if (prog.total > 0 && prog.pct >= 100) {
+      completed.push(p);
+    } else {
+      inProgress.push(p);
+    }
+  });
+
+  // Completed: sort by publishDate descending (newest first), undated at end
+  completed.sort((a, b) => {
+    if (!a.publishDate && !b.publishDate) return 0;
+    if (!a.publishDate) return 1;
+    if (!b.publishDate) return -1;
+    return b.publishDate.localeCompare(a.publishDate);
+  });
+
+  // In-progress section (registration order, as-is)
+  if (inProgress.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = `✏️ 진행 중 (${inProgress.length})`;
+    grid.appendChild(label);
+
+    inProgress.forEach(p => {
+      grid.appendChild(makeProjectCard(p));
+    });
+  }
+
+  // Add button
+  const add = document.createElement('div');
+  add.className = 'project-card add-card';
+  add.onclick = openNewProjectModal;
+  add.textContent = '+ 새 프로젝트';
+  grid.appendChild(add);
+
+  // Completed section (publish date order, paginated)
+  if (completed.length > 0) {
+    const totalPages = Math.ceil(completed.length / PAGE_SIZE);
+    if (completedPage > totalPages) completedPage = totalPages;
+    const start = (completedPage - 1) * PAGE_SIZE;
+    const paged = completed.slice(start, start + PAGE_SIZE);
+
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = `📚 완료 (${completed.length})`;
+    grid.appendChild(label);
+
+    paged.forEach(p => {
+      grid.appendChild(makeProjectCard(p));
+    });
+
+    if (totalPages > 1) {
+      grid.appendChild(makePagination(completedPage, totalPages, function(p) { completedPage = p; renderProjectList(); }));
+    }
+  }
+}
+
+function makeProjectCard(p) {
+  const prog = getProgress(p);
+  const barColor = prog.pct >= 100 ? 'var(--green)' : 'var(--accent)';
+  const card = document.createElement('div');
+  card.className = 'project-card';
+  card.onclick = () => { currentProjectId = p.id; showView('detail'); };
+  card.innerHTML = `
+    <div class="project-card-cover">
+      ${p.cover ? `<img src="${p.cover}">` : '표지 없음'}
+    </div>
+    <div class="project-card-body">
+      <div class="project-card-title">${esc(p.title)}</div>
+      <div class="project-card-meta">
+        <span class="badge ${p.category==='novel'?'badge-novel':'badge-manga'}">${p.category==='novel'?'소설':'만화'}</span>
+        ${p.pairing ? `<span>${esc(p.pairing)}</span>` : ''}
+        ${p.pages ? `<span>${p.pages}p</span>` : ''}
+        ${p.category==='novel' && p.wordCount ? `<span>${p.wordCount.toLocaleString()}자</span>` : ''}
+        ${p.publishDate ? `<span>${p.publishDate}</span>` : ''}
+        ${p.type ? `<span class="badge ${p.type==='행사'?'badge-event':'badge-mailorder'}">${p.type}</span>` : ''}
+      </div>
+      <div class="project-card-progress">
+        <div class="project-card-progress-bar" style="width:${prog.pct}%;background:${barColor};"></div>
+      </div>
+    </div>`;
+  return card;
+}
+
+// ========== ARCHIVE ==========
+function renderArchive() {
+  const grid = document.getElementById('archiveGrid');
+  const empty = document.getElementById('archiveEmpty');
+  grid.innerHTML = '';
+
+  const done = projects.filter(p => { const pr = getProgress(p); return pr.total > 0 && pr.pct >= 100; });
+
+  if (done.length === 0) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  const totalPages = Math.ceil(done.length / PAGE_SIZE);
+  if (archivePage > totalPages) archivePage = totalPages;
+  const start = (archivePage - 1) * PAGE_SIZE;
+  const paged = done.slice(start, start + PAGE_SIZE);
+
+  paged.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'project-card';
+    card.onclick = () => { currentProjectId = p.id; showView('detail'); };
+    card.innerHTML = `
+      <div class="project-card-cover">${p.cover ? `<img src="${p.cover}">` : '표지 없음'}</div>
+      <div class="project-card-body">
+        <div class="project-card-title">${esc(p.title)}</div>
+        <div class="project-card-meta">
+          <span class="badge ${p.category==='novel'?'badge-novel':'badge-manga'}">${p.category==='novel'?'소설':'만화'}</span>
+          ${p.pairing ? `<span>${esc(p.pairing)}</span>` : ''}
+          ${p.pages ? `<span>${p.pages}p</span>` : ''}
+          ${p.category==='novel' && p.wordCount ? `<span>${p.wordCount.toLocaleString()}자</span>` : ''}
+          ${p.publishDate ? `<span>${p.publishDate}</span>` : ''}
+        </div>
+      </div>`;
+    grid.appendChild(card);
+  });
+
+  if (totalPages > 1) {
+    grid.appendChild(makePagination(archivePage, totalPages, function(p) { archivePage = p; renderArchive(); }));
+  }
+}
+
+// ========== FULL CALENDAR ==========
+let calViewYear, calViewMonth, fcSelected = null;
+(function(){const n=new Date();calViewYear=n.getFullYear();calViewMonth=n.getMonth()})();
+
+function renderFullCalendar() {
+  const container = document.getElementById('fullCalendar');
+  const now = new Date(); now.setHours(0,0,0,0);
+  const ty = now.getFullYear(), tm = now.getMonth(), td = now.getDate();
+
+  // 마감일 수집
+  const allDls = [];
+  const dlTypeLabels = {conti:'콘티',rough:'러프',artwork:'작화',review:'퇴고',submission:'입고',writing:'집필',proofreading:'퇴고'};
+  projects.forEach(p => {
+    if (p.deadlines) {
+      Object.entries(p.deadlines).forEach(([key, date]) => {
+        if (date) allDls.push({ date, label: `${p.title} ${dlTypeLabels[key]||key}`, type: key, projectId: p.id });
+      });
+    }
+    if (p.publishDate) {
+      allDls.push({ date: p.publishDate, label: `${p.title} 발행`, type: 'publish', projectId: p.id });
+    }
+  });
+
+  // 작업 기록 수집: 날짜별 합산 + 날짜별 프로젝트별 세부
+  const workMap = {};
+  const workByProject = {}; // key: dateKey, value: { projId: { title, conti, rough, artwork, writing, proofreading } }
+  projects.forEach(p => {
+    if (p.category === 'novel') {
+      // 소설: 단건 항목의 doneDate 수집
+      ['writing','proofreading'].forEach(key => {
+        if (p[key]?.doneDate) {
+          const dd = p[key].doneDate;
+          if (!workMap[dd]) workMap[dd] = { conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0, wLog: 0 };
+          workMap[dd][key]++;
+          if (!workByProject[dd]) workByProject[dd] = {};
+          if (!workByProject[dd][p.id]) workByProject[dd][p.id] = { title: p.title, category: 'novel', conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0, wLog: 0, writingUnit: p.writingUnit };
+          workByProject[dd][p.id][key]++;
+        }
+      });
+      // 소설: 집필 기록 수집
+      (p.writingLogs || []).forEach(l => {
+        if (!workMap[l.date]) workMap[l.date] = { conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0, wLog: 0 };
+        workMap[l.date].wLog = (workMap[l.date].wLog || 0) + l.amount;
+        if (!workByProject[l.date]) workByProject[l.date] = {};
+        if (!workByProject[l.date][p.id]) workByProject[l.date][p.id] = { title: p.title, category: 'novel', conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0, wLog: 0, writingUnit: p.writingUnit };
+        workByProject[l.date][p.id].wLog = (workByProject[l.date][p.id].wLog || 0) + l.amount;
+      });
+    } else {
+      ['conti','rough','artwork'].forEach(phase => {
+        (p[phase] || []).forEach(pg => {
+          if (pg.doneDate) {
+            if (!workMap[pg.doneDate]) workMap[pg.doneDate] = { conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0 };
+            workMap[pg.doneDate][phase]++;
+            if (!workByProject[pg.doneDate]) workByProject[pg.doneDate] = {};
+            if (!workByProject[pg.doneDate][p.id]) workByProject[pg.doneDate][p.id] = { title: p.title, category: 'manga', conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0 };
+            workByProject[pg.doneDate][p.id][phase]++;
+          }
+        });
+      });
+    }
+  });
+
+  const firstDay = new Date(calViewYear, calViewMonth, 1).getDay();
+  const dim = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+  const isCM = calViewYear === ty && calViewMonth === tm;
+
+  const dlMap = {};
+  allDls.forEach(dl => {
+    const p = dl.date.split('-');
+    const y = +p[0], m = +p[1]-1, d = +p[2];
+    if (y === calViewYear && m === calViewMonth) {
+      if (!dlMap[d]) dlMap[d] = [];
+      dlMap[d].push(dl);
+    }
+  });
+
+  const cells = Array(firstDay).fill(null).concat(Array.from({length: dim}, (_, i) => i + 1));
+  const legendItems = [
+    {type:'conti',label:'콘티',color:'rgba(66,133,244,0.15)',textColor:'#4285F4'},
+    {type:'rough',label:'러프',color:'rgba(52,168,83,0.15)',textColor:'#34A853'},
+    {type:'artwork',label:'작화',color:'rgba(251,188,4,0.15)',textColor:'#E8A000'},
+    {type:'review',label:'퇴고',color:'rgba(156,39,176,0.15)',textColor:'#9C27B0'},
+    {type:'submission',label:'입고',color:'rgba(234,67,53,0.15)',textColor:'#EA4335'},
+    {type:'publish',label:'발행',color:'rgba(232,148,90,0.15)',textColor:'var(--accent)'}
+  ];
+
+  let html = `
+    <div class="full-cal-nav">
+      <button onclick="calViewMonth--;if(calViewMonth<0){calViewMonth=11;calViewYear--}fcSelected=null;renderFullCalendar()">◀</button>
+      <span class="cal-month-label">${calViewYear}년 ${calViewMonth+1}월</span>
+      <button onclick="calViewMonth++;if(calViewMonth>11){calViewMonth=0;calViewYear++}fcSelected=null;renderFullCalendar()">▶</button>
+      ${(calViewYear!==ty||calViewMonth!==tm)?`<button onclick="calViewYear=${ty};calViewMonth=${tm};fcSelected=null;renderFullCalendar()" style="font-size:11px;">오늘</button>`:''}
+    </div>
+    <div class="full-cal-legend">${legendItems.map(l=>`<div class="full-cal-legend-item"><div class="full-cal-legend-dot" style="background:${l.color};border:1px solid ${l.textColor}"></div>${l.label}</div>`).join('')}</div>
+    <div class="full-cal-grid">
+      ${'일,월,화,수,목,금,토'.split(',').map(d=>`<div class="full-cal-dow">${d}</div>`).join('')}`;
+
+  cells.forEach((day, i) => {
+    if (day === null) {
+      html += '<div class="full-cal-cell empty"></div>';
+      return;
+    }
+    const isT = isCM && day === td;
+    const isP = isCM && day < td;
+    const dls = dlMap[day] || [];
+    const dateKey = `${calViewYear}-${String(calViewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const wk = workMap[dateKey];
+    const timeVal = dailyLog[dateKey] || 0;
+    const isSel = fcSelected === dateKey;
+    const hasAny = dls.length > 0 || wk || timeVal > 0;
+
+    html += `<div class="full-cal-cell${isT?' today':''}${isP?' past':''}${isSel?' fc-selected':''}" onclick="fcSelected=fcSelected==='${dateKey}'?null:'${dateKey}';renderFullCalendar()" style="${hasAny?'cursor:pointer':''}">
+      <div class="full-cal-day-num">${day}</div>
+      ${dls.slice(0,3).map(dl => `<div class="full-cal-item type-${dl.type}" title="${esc(dl.label)}">${esc(dl.label)}</div>`).join('')}
+      ${dls.length > 3 ? `<div class="full-cal-item" style="text-align:center;color:var(--text-light)">+${dls.length-3}</div>` : ''}
+      ${(wk || timeVal > 0) ? `<div class="full-cal-work">${wk && wk.conti ? `<span class="full-cal-work-tag wt-conti">콘${wk.conti}</span>` : ''}${wk && wk.rough ? `<span class="full-cal-work-tag wt-rough">러${wk.rough}</span>` : ''}${wk && wk.artwork ? `<span class="full-cal-work-tag wt-artwork">작${wk.artwork}</span>` : ''}${wk && wk.writing ? `<span class="full-cal-work-tag wt-conti">집${wk.writing}</span>` : ''}${wk && wk.proofreading ? `<span class="full-cal-work-tag" style="background:rgba(156,39,176,0.1);color:#9C27B0">퇴${wk.proofreading}</span>` : ''}${wk && wk.wLog ? `<span class="full-cal-work-tag wt-artwork">✍${wk.wLog.toLocaleString()}</span>` : ''}${timeVal > 0 ? `<span class="full-cal-work-tag wt-time">${fmtTimeShortCal(timeVal)}</span>` : ''}</div>` : ''}
+    </div>`;
+  });
+  html += '</div>';
+
+  // 선택한 날의 상세 패널
+  if (fcSelected) {
+    const selDay = parseInt(fcSelected.split('-')[2]);
+    const wk = workMap[fcSelected] || { conti: 0, rough: 0, artwork: 0 };
+    const timeVal = dailyLog[fcSelected] || 0;
+    const projData = workByProject[fcSelected] || {};
+    const projIds = Object.keys(projData);
+    const dls = dlMap[selDay] || [];
+    const totalPages = wk.conti + wk.rough + wk.artwork + (wk.writing||0) + (wk.proofreading||0);
+    const hasContent = totalPages > 0 || timeVal > 0 || dls.length > 0;
+
+    html += `<div class="full-cal-detail">
+      <div class="full-cal-detail-header">
+        <span class="full-cal-detail-date">${calViewYear}년 ${calViewMonth+1}월 ${selDay}일</span>
+        <button class="full-cal-detail-close" onclick="fcSelected=null;renderFullCalendar()">✕</button>
+      </div>`;
+
+    if (!hasContent) {
+      html += '<div class="full-cal-detail-empty">이 날은 기록이 없어요</div>';
+    } else {
+      // 마감일 표시
+      if (dls.length > 0) {
+        dls.forEach(dl => {
+          html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:${({conti:'#4285F4',rough:'#34A853',artwork:'#E8A000',review:'#9C27B0',submission:'#EA4335',publish:'var(--accent)'}[dl.type])||'var(--accent)'}"></div><span class="full-cal-detail-label">${esc(dl.label)}</span><span class="full-cal-detail-val" style="font-size:11px;color:var(--text-light)">마감</span></div>`;
+        });
+        if (projIds.length > 0 || timeVal > 0) html += '<div style="border-top:1px solid var(--border-light);margin:6px 0"></div>';
+      }
+
+      // 프로젝트별 작업 내역
+      if (projIds.length > 0) {
+        projIds.forEach(pid => {
+          const pd = projData[pid];
+          html += `<div class="full-cal-detail-project">
+            <div class="full-cal-detail-pname" style="cursor:pointer;" onclick="currentProjectId='${pid}';showView('detail')" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color=''">📖 ${esc(pd.title)}</div>`;
+          if (pd.conti > 0) html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:#4285F4"></div><span class="full-cal-detail-label">콘티</span><span class="full-cal-detail-val">${pd.conti}p</span></div>`;
+          if (pd.rough > 0) html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:#34A853"></div><span class="full-cal-detail-label">러프</span><span class="full-cal-detail-val">${pd.rough}p</span></div>`;
+          if (pd.artwork > 0) html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:#E8A000"></div><span class="full-cal-detail-label">작화</span><span class="full-cal-detail-val">${pd.artwork}p</span></div>`;
+          if (pd.writing > 0) html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:#4285F4"></div><span class="full-cal-detail-label">집필</span><span class="full-cal-detail-val">완료</span></div>`;
+          if (pd.proofreading > 0) html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:#9C27B0"></div><span class="full-cal-detail-label">퇴고</span><span class="full-cal-detail-val">완료</span></div>`;
+          if (pd.wLog > 0) { const wu = pd.writingUnit === 'pages' ? 'p' : '자'; html += `<div class="full-cal-detail-row"><div class="full-cal-detail-dot" style="background:var(--accent)"></div><span class="full-cal-detail-label">집필 기록</span><span class="full-cal-detail-val">+${pd.wLog.toLocaleString()}${wu}</span></div>`; }
+          html += '</div>';
+        });
+      }
+
+      // 합산 + 작업시간
+      if (totalPages > 0 || timeVal > 0) {
+        html += '<div class="full-cal-detail-total">';
+        if (totalPages > 0) {
+          const parts = [];
+          if (wk.conti) parts.push(`콘${wk.conti}`);
+          if (wk.rough) parts.push(`러${wk.rough}`);
+          if (wk.artwork) parts.push(`작${wk.artwork}`);
+          if (wk.writing) parts.push('집필');
+          if (wk.proofreading) parts.push('퇴고');
+          if (wk.wLog) parts.push(`✍${wk.wLog.toLocaleString()}`);
+          html += `<span>총 ${totalPages}건 (${parts.join(' ')})</span>`;
+        }
+        if (timeVal > 0) html += `<span>⏱ ${fmtTimeShort(timeVal)}</span>`;
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ========== DETAIL ==========
+function getProject() { return projects.find(p => p.id === currentProjectId); }
+
+function renderDetail() {
+  const p = getProject();
+  if (!p) return showView('list');
+
+  // Cover
+  const coverEl = document.getElementById('detailCover');
+  if (p.cover) {
+    coverEl.classList.add('has-image');
+    coverEl.innerHTML = `<img src="${p.cover}"><input type="file" id="coverInput" accept="image/*" style="display:none" onchange="handleCoverUpload(event)">`;
+  } else {
+    coverEl.classList.remove('has-image');
+    coverEl.innerHTML = `<span>표지 추가</span><input type="file" id="coverInput" accept="image/*" style="display:none" onchange="handleCoverUpload(event)">`;
+  }
+
+  document.getElementById('detailTitle').textContent = p.title;
+
+  let meta = `<span class="badge ${p.category==='novel'?'badge-novel':'badge-manga'}">${p.category==='novel'?'📝 소설':'📘 만화'}</span>`;
+  if (p.pairing) meta += `<span>💕 ${esc(p.pairing)}</span>`;
+  if (p.pages) meta += `<span>📄 ${p.pages}p</span>`;
+  if (p.category === 'novel' && p.wordCount) meta += `<span>✍️ 목표 ${p.wordCount.toLocaleString()}자</span>`;
+  if (p.category === 'novel' && p.writingLogs?.length) {
+    const wTotal = p.writingLogs.reduce((s, l) => s + l.amount, 0);
+    const wUnit = p.writingUnit === 'pages' ? 'p' : '자';
+    meta += `<span>📝 ${wTotal.toLocaleString()}${wUnit} 집필</span>`;
+  }
+  if (p.publishDate) meta += `<span>📅 ${p.publishDate}</span>`;
+  if (p.type) meta += `<span class="badge ${p.type==='행사'?'badge-event':'badge-mailorder'}">${p.type}</span>`;
+  if (p.event) meta += `<span>🎪 ${esc(p.event)}</span>`;
+  if (p.price) meta += `<span>💰 ${esc(p.price)}</span>`;
+  document.getElementById('detailMeta').innerHTML = meta + renderDeadlineBadges(p);
+
+  const prog = getProgress(p);
+  const totalTime = getTotalTime(p);
+  document.getElementById('detailSummary').innerHTML = `
+    <div class="summary-card">
+      <div class="summary-value">${prog.pct}%</div>
+      <div class="summary-label">전체 진행률</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${fmtTimeShort(totalTime)}</div>
+      <div class="summary-label">총 소요 시간</div>
+    </div>`;
+
+  renderTracking();
+  renderReviews();
+  // 완료된 프로젝트는 감상 탭을, 진행 중이면 트래킹 탭을 기본 표시
+  const defaultTab = prog.pct >= 100 ? 'reviews' : 'tracking';
+  showDetailTab(defaultTab);
+}
+
+function showDetailTab(tab) {
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.detail-panel').forEach(p => p.classList.remove('active'));
+  const idx = tab === 'tracking' ? 0 : tab === 'calendar' ? 1 : 2;
+  document.querySelectorAll('.detail-tab')[idx].classList.add('active');
+  const panelId = tab === 'tracking' ? 'panel-tracking' : tab === 'calendar' ? 'panel-calendar' : 'panel-reviews';
+  document.getElementById(panelId).classList.add('active');
+  if (tab === 'calendar') renderProjectCalendar();
+}
+
+// ========== TRACKING ==========
+function getTodayKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+function renderDailyGoals(p) {
+  if (!p.dailyGoals) p.dailyGoals = {};
+  const tk = getTodayKey();
+  const today = p.dailyGoals[tk] || { conti: 0, rough: 0, artwork: 0 };
+
+  // 기준점(baseline) 초기화: 오늘 처음 열었을 때 현재 완료 수를 저장
+  if (today._baseInit === undefined) {
+    today._baseConti = (p.conti||[]).filter(pg => pg.done).length;
+    today._baseRough = (p.rough||[]).filter(pg => pg.done).length;
+    today._baseArtwork = (p.artwork||[]).filter(pg => pg.done).length;
+    today._baseInit = true;
+    p.dailyGoals[tk] = today;
+    save();
+  }
+
+  const phases = [
+    { key: 'conti', label: '📋 콘티', data: p.conti||[] },
+    { key: 'rough', label: '✏️ 러프', data: p.rough||[] },
+    { key: 'artwork', label: '🖊 작화', data: p.artwork||[] }
+  ];
+
+  const cards = phases.map(ph => {
+    const totalDone = ph.data.filter(pg => pg.done).length;
+    const baseKey = `_base${ph.key.charAt(0).toUpperCase()+ph.key.slice(1)}`;
+    const baseline = today[baseKey] || 0;
+    const todayDone = Math.max(0, totalDone - baseline);
+    const goal = today[ph.key] || 0;
+    const pct = goal > 0 ? Math.min(100, Math.round((todayDone / goal) * 100)) : 0;
+    const achieved = goal > 0 && todayDone >= goal;
+
+    return `
+        <div class="goal-item${achieved ? ' achieved' : ''}">
+          <div class="goal-label">${ph.label}</div>
+          <input class="goal-input" type="number" min="0" value="${goal||''}" placeholder="0" onchange="setDailyGoal('${ph.key}',this.value)">
+          <div class="goal-progress"><span class="done">${totalDone}</span>/${ph.data.length}p 전체</div>
+          ${goal > 0 ? `
+            <div class="goal-bar-wrap"><div class="goal-bar${achieved?' complete':''}" style="width:${pct}%"></div></div>
+            <div class="goal-today">${achieved?'🎉 ':''}오늘 <span class="highlight">${todayDone}</span>/${goal}장 (${pct}%)</div>
+          ` : ''}
+        </div>`;
+  }).join('');
+
+  return `
+    <div class="daily-goals">
+      <div class="daily-goals-header">
+        <span class="daily-goals-title">🎯 오늘의 목표</span>
+        <span class="daily-goals-date">${tk}</span>
+      </div>
+      <div class="daily-goals-grid">${cards}</div>
+    </div>`;
+}
+
+function setDailyGoal(phase, value) {
+  const p = getProject();
+  if (!p) return;
+  if (!p.dailyGoals) p.dailyGoals = {};
+  const tk = getTodayKey();
+  if (!p.dailyGoals[tk]) {
+    // 목표 처음 설정 시 baseline도 함께 저장
+    const bc = (p.conti||[]).filter(pg => pg.done).length;
+    const br = (p.rough||[]).filter(pg => pg.done).length;
+    const ba = (p.artwork||[]).filter(pg => pg.done).length;
+    p.dailyGoals[tk] = { conti: 0, rough: 0, artwork: 0, _baseConti: bc, _baseRough: br, _baseArtwork: ba, _baseInit: true };
+  }
+  p.dailyGoals[tk][phase] = parseInt(value) || 0;
+  save();
+}
+
+function renderDeadlineBadges(p) {
+  if (!p.deadlines) return '';
+  const now = new Date(); now.setHours(0,0,0,0);
+  const items = p.category === 'novel' ? [
+    { key: 'writing', label: '집필', cls: 'dl-badge-conti' },
+    { key: 'proofreading', label: '퇴고', cls: 'dl-badge-review' },
+    { key: 'submission', label: '입고', cls: 'dl-badge-submission' }
+  ] : [
+    { key: 'conti', label: '콘티', cls: 'dl-badge-conti' },
+    { key: 'rough', label: '러프', cls: 'dl-badge-rough' },
+    { key: 'artwork', label: '작화', cls: 'dl-badge-artwork' },
+    { key: 'review', label: '퇴고', cls: 'dl-badge-review' },
+    { key: 'submission', label: '입고', cls: 'dl-badge-submission' }
+  ];
+  const badges = items.filter(it => p.deadlines[it.key]).map(it => {
+    const d = new Date(p.deadlines[it.key]); d.setHours(0,0,0,0);
+    const diff = Math.ceil((d - now) / 86400000);
+    const tag = diff < 0 ? `D+${Math.abs(diff)}` : diff === 0 ? '오늘' : `D-${diff}`;
+    return `<span class="dl-badge ${it.cls}">${it.label} ${tag}</span>`;
+  });
+  return badges.length ? `<div class="deadline-badges">${badges.join('')}</div>` : '';
+}
+
+function renderWritingLogs(p) {
+  if (!p.writingLogs || p.writingLogs.length === 0) return '';
+  const unit = p.writingUnit === 'pages' ? 'p' : '자';
+  const total = p.writingLogs.reduce((s, l) => s + l.amount, 0);
+  const recent = p.writingLogs.slice(-5).reverse();
+  let html = `<div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:8px;font-size:12px;">`;
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-weight:600;">📊 누적: ${total.toLocaleString()}${unit}</span>`;
+  if (p.wordCount && p.writingUnit === 'chars') {
+    const pct = Math.min(100, Math.round(total / p.wordCount * 100));
+    html += `<span style="color:var(--text-light);">${pct}% (목표 ${p.wordCount.toLocaleString()}자)</span>`;
+  }
+  html += `</div>`;
+  recent.forEach(l => {
+    html += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-sub);"><span>${l.date}</span><span>+${l.amount.toLocaleString()}${unit}</span></div>`;
+  });
+  if (p.writingLogs.length > 5) html += `<div style="text-align:center;color:var(--text-light);padding-top:4px;">... 외 ${p.writingLogs.length - 5}건</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function addWritingLog() {
+  const p = getProject();
+  if (!p || p.category !== 'novel') return;
+  const input = document.getElementById('writingLogInput');
+  const amount = parseInt(input.value);
+  if (!amount || amount <= 0) return;
+  if (!p.writingLogs) p.writingLogs = [];
+  p.writingLogs.push({ date: getTodayKey(), amount });
+  save();
+  input.value = '';
+  renderTracking();
+  const unit = p.writingUnit === 'pages' ? 'p' : '자';
+  notify(`+${amount.toLocaleString()}${unit} 기록 완료!`);
+}
+
+function renderSinglePhase(p, key, label) {
+  const item = p[key];
+  if (!item) return '';
+  const timerKey = `${p.id}-${key}-0`;
+  const rec = !!activeTimers[timerKey];
+  let extra = '';
+  if (key === 'writing' && p.category === 'novel') {
+    const unit = p.writingUnit === 'pages' ? 'pages' : 'chars';
+    const unitLabel = unit === 'pages' ? 'p' : '자';
+    const placeholder = unit === 'pages' ? '오늘 쓴 페이지 수' : '오늘 쓴 글자 수';
+    extra = `
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;padding:0 16px 12px;">
+        <input type="number" id="writingLogInput" placeholder="${placeholder}" min="1" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+        <button class="btn btn-primary btn-sm" onclick="addWritingLog()">+${unitLabel} 기록</button>
+      </div>` + renderWritingLogs(p);
+  }
+  return `
+    <div class="tracking-section">
+      <div class="tracking-section-header">
+        <div class="tracking-section-title">${label}</div>
+      </div>
+      <div class="plot-block">
+        <div class="plot-left">
+          <button class="check-btn ${item.done?'checked':''}" onclick="toggleSinglePhase('${key}')"></button>
+          <span style="font-size:14px;">${item.done ? '완료' : '진행 중'}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="time-display">${fmtTime(item.time||0)}</span>
+          <button class="time-btn ${rec?'recording':''}" onclick="${rec?`stopTimer('${key}',0)`:`startTimer('${key}',0)`}" title="${rec?'중지':'시작'}">${rec?'⏹':'▶'}</button>
+        </div>
+      </div>${extra}
+    </div>`;
+}
+
+function toggleSinglePhase(key) {
+  const p = getProject();
+  if (!p[key]) p[key] = { done: false, time: 0 };
+  p[key].done = !p[key].done;
+  p[key].doneDate = p[key].done ? getTodayKey() : null;
+  save();
+  renderDetail();
+}
+
+function renderTracking() {
+  const p = getProject();
+  if (!p) return;
+
+  let html = '';
+
+  if (p.category !== 'novel') {
+    html += renderDailyGoals(p);
+  }
+
+  html += `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-sm" onclick="toggleAllProject()">📦 전체 완료 처리</button>
+    </div>`;
+
+  // Plot (공통)
+  html += renderSinglePhase(p, 'plot', '📝 플롯');
+
+  if (p.category === 'novel') {
+    // 소설: 집필, 퇴고 (단건)
+    html += renderSinglePhase(p, 'writing', '✍️ 집필');
+    html += renderSinglePhase(p, 'proofreading', '🔍 퇴고');
+  } else {
+    // 만화: 콘티, 러프, 작화 (페이지별)
+    const phases = [
+      { key: 'conti', label: '📋 콘티' },
+      { key: 'rough', label: '✏️ 러프' },
+      { key: 'artwork', label: '🖊 작화 (펜+톤)' }
+    ];
+
+    phases.forEach(phase => {
+      const data = p[phase.key];
+      if (!data || data.length === 0) return;
+      const doneCount = data.filter(pg => pg.done).length;
+      const allDone = doneCount === data.length;
+
+      html += `
+        <div class="tracking-section">
+          <div class="tracking-section-header">
+            <div class="tracking-section-title">${phase.label} <span class="count">${doneCount}/${data.length}</span></div>
+            <button class="btn btn-sm" onclick="toggleAllPages('${phase.key}')" style="font-size:12px;">${allDone ? '☐ 전체 해제' : '☑ 전체 선택'}</button>
+          </div>
+          <table class="tracking-table">
+            <thead><tr>
+              <th style="width:50px;">완료</th>
+              <th>페이지</th>
+              <th style="width:100px;">소요 시간</th>
+              <th style="width:70px;">기록</th>
+            </tr></thead>
+            <tbody>`;
+
+      data.forEach((pg, i) => {
+        const k = `${p.id}-${phase.key}-${i}`;
+        const rec = !!activeTimers[k];
+        html += `
+              <tr>
+                <td><button class="check-btn ${pg.done?'checked':''}" onclick="togglePage('${phase.key}',${i})"></button></td>
+                <td>${i+1}p</td>
+                <td><span class="time-display">${fmtTime(pg.time||0)}</span></td>
+                <td><button class="time-btn ${rec?'recording':''}" onclick="${rec?`stopTimer('${phase.key}',${i})`:`startTimer('${phase.key}',${i})`}" title="${rec?'중지':'시작'}">${rec?'⏹':'▶'}</button></td>
+              </tr>`;
+      });
+
+      html += `</tbody></table></div>`;
+    });
+  }
+
+  document.getElementById('panel-tracking').innerHTML = html;
+}
+
+// ========== PROJECT CALENDAR ==========
+let pcalYear, pcalMonth, pcalSelected = null, pcalMode = 'calendar', pcalHover = null;
+(function() { const d = new Date(); pcalYear = d.getFullYear(); pcalMonth = d.getMonth(); })();
+
+function fmtTimeShortCal(sec) {
+  if (!sec || sec < 60) return '';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h}h${m}m` : `${m}m`;
+}
+
+function renderProjectCalendar() {
+  const p = getProject();
+  if (!p) return;
+  const panel = document.getElementById('panel-calendar');
+
+  // Collect done dates
+  const dateCounts = {};
+  if (p.category === 'novel') {
+    ['writing','proofreading'].forEach(key => {
+      if (p[key]?.doneDate) {
+        if (!dateCounts[p[key].doneDate]) dateCounts[p[key].doneDate] = { conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0, wLog: 0 };
+        dateCounts[p[key].doneDate][key]++;
+      }
+    });
+    (p.writingLogs || []).forEach(l => {
+      if (!dateCounts[l.date]) dateCounts[l.date] = { conti: 0, rough: 0, artwork: 0, writing: 0, proofreading: 0, wLog: 0 };
+      dateCounts[l.date].wLog = (dateCounts[l.date].wLog || 0) + l.amount;
+    });
+  } else {
+    ['conti','rough','artwork'].forEach(phase => {
+      (p[phase] || []).forEach(pg => {
+        if (pg.doneDate) {
+          if (!dateCounts[pg.doneDate]) dateCounts[pg.doneDate] = { conti: 0, rough: 0, artwork: 0 };
+          dateCounts[pg.doneDate][phase]++;
+        }
+      });
+    });
+  }
+
+  const first = new Date(pcalYear, pcalMonth, 1);
+  const lastDay = new Date(pcalYear, pcalMonth + 1, 0).getDate();
+  const startDow = first.getDay();
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const isCurrentMonth = pcalYear === now.getFullYear() && pcalMonth === now.getMonth();
+
+  // Build day data
+  const days = [];
+  let monthConti = 0, monthRough = 0, monthArtwork = 0, monthWriting = 0, monthProof = 0, maxWork = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const key = `${pcalYear}-${String(pcalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dc = dateCounts[key] || { conti: 0, rough: 0, artwork: 0 };
+    const timeVal = dailyLog[key] || 0;
+    const wLog = dc.wLog || 0;
+    const pages = dc.conti + dc.rough + dc.artwork + (dc.writing||0) + (dc.proofreading||0) + (wLog > 0 ? 1 : 0);
+    monthConti += dc.conti; monthRough += dc.rough; monthArtwork += dc.artwork;
+    monthWriting += dc.writing||0; monthProof += dc.proofreading||0;
+    const workScore = pages + (timeVal > 0 ? 1 : 0);
+    if (workScore > maxWork) maxWork = workScore;
+    days.push({ d, key, dc, timeVal, pages, workScore });
+  }
+  const getLevel = s => { if (s === 0) return 0; const r = s / Math.max(maxWork, 1); if (r <= 0.2) return 1; if (r <= 0.4) return 2; if (r <= 0.6) return 3; if (r <= 0.8) return 4; return 5; };
+
+  const DOW = ['일','월','화','수','목','금','토'];
+  let html = '<div class="pcal-container">';
+
+  // Mode toggle
+  html += `<div style="display:flex;justify-content:center;"><div class="pcal-mode-toggle">
+    <button class="pcal-mode-btn${pcalMode==='calendar'?' active':''}" onclick="pcalMode='calendar';renderProjectCalendar()">📅 달력</button>
+    <button class="pcal-mode-btn${pcalMode==='heatmap'?' active':''}" onclick="pcalMode='heatmap';renderProjectCalendar()">🟩 히트맵</button>
+  </div></div>`;
+
+  // Summary
+  if (p.category === 'novel') {
+    html += `<div class="pcal-summary">
+      <div class="pcal-stat"><div class="pcal-stat-value" style="color:var(--blue)">${monthWriting}</div><div class="pcal-stat-label">집필</div></div>
+      <div class="pcal-stat"><div class="pcal-stat-value" style="color:#9C27B0">${monthProof}</div><div class="pcal-stat-label">퇴고</div></div>
+    </div>`;
+  } else {
+    html += `<div class="pcal-summary">
+      <div class="pcal-stat"><div class="pcal-stat-value" style="color:var(--blue)">${monthConti}</div><div class="pcal-stat-label">콘티</div></div>
+      <div class="pcal-stat"><div class="pcal-stat-value" style="color:var(--green)">${monthRough}</div><div class="pcal-stat-label">러프</div></div>
+      <div class="pcal-stat"><div class="pcal-stat-value">${monthArtwork}</div><div class="pcal-stat-label">작화</div></div>
+    </div>`;
+  }
+
+  // Nav
+  html += `<div class="pcal-nav">
+    <button onclick="pcalYear=${pcalMonth===0?pcalYear-1:pcalYear};pcalMonth=${pcalMonth===0?11:pcalMonth-1};pcalSelected=null;renderProjectCalendar()">◀</button>
+    <span class="pcal-month">${pcalYear}년 ${pcalMonth+1}월</span>
+    <button onclick="pcalYear=${pcalMonth===11?pcalYear+1:pcalYear};pcalMonth=${pcalMonth===11?0:pcalMonth+1};pcalSelected=null;renderProjectCalendar()">▶</button>
+    ${!isCurrentMonth ? `<button onclick="pcalYear=${now.getFullYear()};pcalMonth=${now.getMonth()};pcalSelected=null;renderProjectCalendar()" style="font-size:11px;">오늘</button>` : ''}
+  </div>`;
+
+  if (pcalMode === 'calendar') {
+    // ===== CALENDAR MODE =====
+    html += '<div class="pcal-grid">';
+    DOW.forEach(d => { html += `<div class="pcal-dow">${d}</div>`; });
+    for (let i = 0; i < startDow; i++) html += '<div class="pcal-cell empty"></div>';
+
+    days.forEach(day => {
+      const hasWork = day.pages > 0 || day.timeVal > 0;
+      const isToday = day.key === todayKey;
+      const isSel = pcalSelected === day.key;
+      let cls = 'pcal-cell';
+      if (hasWork) cls += ' has-work';
+      if (isToday) cls += ' today';
+      if (isSel) cls += ' selected';
+
+      html += `<div class="${cls}" onclick="pcalSelected=pcalSelected==='${day.key}'?null:'${day.key}';renderProjectCalendar()">`;
+      html += `<div class="pcal-day">${day.d}</div>`;
+      if (day.pages > 0) {
+        html += '<div class="pcal-dots">';
+        if (p.category === 'novel') {
+          if (day.dc.writing > 0) html += '<div class="pcal-dot conti"></div>';
+          if (day.dc.proofreading > 0) html += '<div class="pcal-dot" style="background:var(--accent)"></div>';
+        } else {
+          for (let i = 0; i < Math.min(day.dc.conti, 5); i++) html += '<div class="pcal-dot conti"></div>';
+          for (let i = 0; i < Math.min(day.dc.rough, 5); i++) html += '<div class="pcal-dot rough"></div>';
+          for (let i = 0; i < Math.min(day.dc.artwork, 5); i++) html += '<div class="pcal-dot artwork"></div>';
+        }
+        html += '</div>';
+      }
+      if (day.dc.wLog > 0) {
+        const wu = p.writingUnit === 'pages' ? 'p' : '자';
+        html += `<div class="pcal-time" style="color:var(--accent);">${day.dc.wLog.toLocaleString()}${wu}</div>`;
+      }
+      if (day.timeVal > 0) html += `<div class="pcal-time">${fmtTimeShortCal(day.timeVal)}</div>`;
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Legend
+    if (p.category === 'novel') {
+      html += `<div class="pcal-legend">
+        <div class="pcal-legend-item"><div class="pcal-dot conti"></div> 집필</div>
+        <div class="pcal-legend-item"><div class="pcal-dot" style="background:var(--accent)"></div> 퇴고</div>
+      </div>`;
+    } else {
+      html += `<div class="pcal-legend">
+        <div class="pcal-legend-item"><div class="pcal-dot conti"></div> 콘티</div>
+        <div class="pcal-legend-item"><div class="pcal-dot rough"></div> 러프</div>
+        <div class="pcal-legend-item"><div class="pcal-dot artwork"></div> 작화</div>
+      </div>`;
+    }
+
+  } else {
+    // ===== HEATMAP MODE =====
+    html += '<div class="pcal-hm-grid">';
+    DOW.forEach(d => { html += `<div class="pcal-dow">${d}</div>`; });
+    for (let i = 0; i < startDow; i++) html += '<div class="pcal-hm-cell empty"></div>';
+
+    days.forEach(day => {
+      const lv = getLevel(day.workScore);
+      const isToday = day.key === todayKey;
+      const isSel = pcalSelected === day.key;
+      let cls = `pcal-hm-cell lv${lv}`;
+      if (isToday) cls += ' today';
+      if (isSel) cls += ' selected';
+
+      // Tooltip parts
+      const tips = [];
+      if (day.dc.conti > 0) tips.push(`콘티 ${day.dc.conti}p`);
+      if (day.dc.rough > 0) tips.push(`러프 ${day.dc.rough}p`);
+      if (day.dc.artwork > 0) tips.push(`작화 ${day.dc.artwork}p`);
+      if (day.dc.writing > 0) tips.push('집필 완료');
+      if (day.dc.proofreading > 0) tips.push('퇴고 완료');
+      if (day.dc.wLog > 0) { const wu = p.writingUnit === 'pages' ? 'p' : '자'; tips.push(`${day.dc.wLog.toLocaleString()}${wu} 집필`); }
+      if (day.timeVal > 0) tips.push(fmtTimeShortCal(day.timeVal));
+      const tipText = tips.length > 0 ? `${day.d}일 — ${tips.join(', ')}` : `${day.d}일 — 작업 없음`;
+
+      html += `<div class="${cls}" onclick="pcalSelected=pcalSelected==='${day.key}'?null:'${day.key}';renderProjectCalendar()" onmouseenter="this.querySelector('.pcal-hm-tooltip')&&(this.querySelector('.pcal-hm-tooltip').style.display='block')" onmouseleave="this.querySelector('.pcal-hm-tooltip')&&(this.querySelector('.pcal-hm-tooltip').style.display='none')">`;
+      html += `<div class="pcal-hm-tooltip" style="display:none">${tipText}</div>`;
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Heatmap Legend
+    html += `<div class="pcal-hm-legend">
+      <span>적음</span>
+      <div class="pcal-hm-legend-cell lv0"></div><div class="pcal-hm-legend-cell lv1"></div><div class="pcal-hm-legend-cell lv2"></div><div class="pcal-hm-legend-cell lv3"></div><div class="pcal-hm-legend-cell lv4"></div><div class="pcal-hm-legend-cell lv5"></div>
+      <span>많음</span>
+    </div>`;
+  }
+
+  // Selected day detail (shared)
+  if (pcalSelected) {
+    const selDay = days.find(d => d.key === pcalSelected);
+    if (selDay) {
+      const dc = selDay.dc;
+      const timeVal = selDay.timeVal;
+      const totalPages = selDay.pages;
+
+      html += `<div class="pcal-detail">
+        <div class="pcal-detail-header">
+          <span class="pcal-detail-date">${pcalYear}년 ${pcalMonth+1}월 ${selDay.d}일</span>
+          <button class="pcal-detail-close" onclick="pcalSelected=null;renderProjectCalendar()">✕</button>
+        </div>`;
+
+      if (totalPages === 0 && timeVal === 0) {
+        html += '<div style="font-size:12px;color:var(--text-light);text-align:center;padding:8px 0;">이 날은 기록이 없어요</div>';
+      } else {
+        if (dc.conti > 0) html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:var(--blue)"></div><span class="pcal-detail-label">콘티</span><span class="pcal-detail-value">${dc.conti}p</span></div>`;
+        if (dc.rough > 0) html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:var(--green)"></div><span class="pcal-detail-label">러프</span><span class="pcal-detail-value">${dc.rough}p</span></div>`;
+        if (dc.artwork > 0) html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:var(--accent)"></div><span class="pcal-detail-label">작화</span><span class="pcal-detail-value">${dc.artwork}p</span></div>`;
+        if (dc.writing > 0) html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:var(--blue)"></div><span class="pcal-detail-label">집필</span><span class="pcal-detail-value">완료</span></div>`;
+        if (dc.proofreading > 0) html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:#9C27B0"></div><span class="pcal-detail-label">퇴고</span><span class="pcal-detail-value">완료</span></div>`;
+        if (dc.wLog > 0) { const wu = p.writingUnit === 'pages' ? 'p' : '자'; html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:var(--accent)"></div><span class="pcal-detail-label">집필 기록</span><span class="pcal-detail-value">+${dc.wLog.toLocaleString()}${wu}</span></div>`; }
+        if (timeVal > 0) html += `<div class="pcal-detail-row"><div class="pcal-detail-dot" style="background:var(--text-light)"></div><span class="pcal-detail-label">작업시간</span><span class="pcal-detail-value">${fmtTimeShort(timeVal)}</span></div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
+function togglePlot() {
+  const p = getProject();
+  if (!p.plot) p.plot = { done: false, time: 0 };
+  p.plot.done = !p.plot.done;
+  p.plot.doneDate = p.plot.done ? getTodayKey() : null;
+  save();
+  renderDetail();
+}
+
+function togglePage(phase, idx) {
+  const p = getProject();
+  if (p[phase]?.[idx] !== undefined) {
+    p[phase][idx].done = !p[phase][idx].done;
+    p[phase][idx].doneDate = p[phase][idx].done ? getTodayKey() : null;
+    save();
+    renderTracking();
+  }
+}
+
+function toggleAllPages(phase) {
+  const p = getProject();
+  if (!p[phase]) return;
+  const allDone = p[phase].every(pg => pg.done);
+  const today = getTodayKey();
+  p[phase].forEach(pg => { pg.done = !allDone; pg.doneDate = !allDone ? today : null; });
+  save();
+  renderTracking();
+  renderDetail();
+}
+
+function toggleAllProject() {
+  const p = getProject();
+  if (!p) return;
+  const prog = getProgress(p);
+  const markDone = prog.pct < 100;
+  const today = getTodayKey();
+  if (!p.plot) p.plot = { done: false, time: 0 };
+  p.plot.done = markDone;
+  p.plot.doneDate = markDone ? today : null;
+  if (p.category === 'novel') {
+    ['writing','proofreading'].forEach(k => {
+      if (!p[k]) p[k] = { done: false, time: 0 };
+      p[k].done = markDone;
+      p[k].doneDate = markDone ? today : null;
+    });
+  } else {
+    ['conti','rough','artwork'].forEach(ph => {
+      if (p[ph]) p[ph].forEach(pg => { pg.done = markDone; pg.doneDate = markDone ? today : null; });
+    });
+  }
+  save();
+  renderDetail();
+}
+
+// ========== TIME TRACKING ==========
+function startTimer(phase, page) {
+  const p = getProject();
+  // Stop other timers in same project
+  Object.keys(activeTimers).forEach(k => {
+    if (k.startsWith(p.id + '-')) {
+      const parts = k.split('-');
+      stopTimerInternal(k, parts[1], parseInt(parts[2]));
+    }
+  });
+
+  const key = `${p.id}-${phase}-${page}`;
+  activeTimers[key] = { startTime: Date.now() };
+  renderTracking();
+}
+
+function stopTimer(phase, page) {
+  const p = getProject();
+  const key = `${p.id}-${phase}-${page}`;
+  stopTimerInternal(key, phase, page);
+  renderTracking();
+  renderDetail();
+}
+
+function stopTimerInternal(key, phase, page) {
+  const timer = activeTimers[key];
+  if (!timer) return;
+  const elapsed = Math.floor((Date.now() - timer.startTime) / 1000);
+  const p = getProject();
+
+  if (phase === 'plot' || phase === 'writing' || phase === 'proofreading') {
+    if (!p[phase]) p[phase] = { done: false, time: 0 };
+    p[phase].time = (p[phase].time || 0) + elapsed;
+  } else if (p[phase]?.[page] !== undefined) {
+    p[phase][page].time = (p[phase][page].time || 0) + elapsed;
+  }
+
+  delete activeTimers[key];
+  save();
+  if (elapsed > 0) logDailyTime(elapsed);
+}
+
+// ========== REVIEWS ==========
+function renderReviews() {
+  const p = getProject();
+  if (!p) return;
+  if (!p.reviews) p.reviews = [];
+
+  let html = '';
+
+  if (p.reviews.length === 0) {
+    html += '<div class="empty-state">아직 감상이 없어요. 첫 리뷰를 추가해보세요!</div>';
+  } else {
+    p.reviews.forEach((r, i) => {
+      html += `
+        <div class="review-item">
+          <button class="review-delete" onclick="deleteReview(${i})">✕</button>
+          <div class="review-text">${esc(r.text)}</div>
+          <div class="review-meta">
+            ${r.source ? `<span>📍 ${esc(r.source)}</span>` : ''}
+            ${r.date ? `<span>📅 ${r.date}</span>` : ''}
+          </div>
+        </div>`;
+    });
+  }
+
+  html += `
+    <div class="review-form">
+      <textarea id="reviewText" placeholder="감상 내용을 적어주세요..."></textarea>
+      <div class="review-form-row">
+        <input type="text" id="reviewSource" placeholder="출처 (트위터, 블루스카이 등)">
+        <input type="date" id="reviewDate">
+        <button class="btn btn-primary btn-sm" onclick="addReview()">추가</button>
+      </div>
+    </div>`;
+
+  document.getElementById('panel-reviews').innerHTML = html;
+}
+
+function addReview() {
+  const p = getProject();
+  const text = document.getElementById('reviewText').value.trim();
+  if (!text) return;
+  if (!p.reviews) p.reviews = [];
+  p.reviews.push({
+    text,
+    source: document.getElementById('reviewSource').value.trim(),
+    date: document.getElementById('reviewDate').value || new Date().toISOString().slice(0,10)
+  });
+  save();
+  renderReviews();
+  notify('감상이 추가됐어요!');
+}
+
+function deleteReview(idx) {
+  const p = getProject();
+  p.reviews.splice(idx, 1);
+  save();
+  renderReviews();
+}
+
+// ========== COVER ==========
+function uploadCover() { document.getElementById('coverInput').click(); }
+
+function handleCoverUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const p = getProject();
+    p.cover = ev.target.result;
+    save();
+    renderDetail();
+    notify('표지가 등록됐어요!');
+  };
+  reader.readAsDataURL(file);
+}
+
+// ========== MODALS ==========
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+function closeModalOutside(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
+
+function onCategoryChange(cat) {
+  const mangaFields = document.getElementById('mangaFields');
+  const novelFields = document.getElementById('novelFields');
+  const mangaDl = document.getElementById('mangaDeadlines');
+  const novelDl = document.getElementById('novelDeadlines');
+  if (cat === 'novel') {
+    if (mangaFields) mangaFields.style.display = 'none';
+    if (novelFields) novelFields.style.display = '';
+    if (mangaDl) mangaDl.style.display = 'none';
+    if (novelDl) novelDl.style.display = '';
+  } else {
+    if (mangaFields) mangaFields.style.display = '';
+    if (novelFields) novelFields.style.display = 'none';
+    if (mangaDl) mangaDl.style.display = '';
+    if (novelDl) novelDl.style.display = 'none';
+  }
+}
+
+function openNewProjectModal() {
+  openModal(`
+    <h2>📖 새 프로젝트</h2>
+    <div class="form-group">
+      <label>카테고리</label>
+      <div class="nav-tabs" style="display:inline-flex;margin-top:4px;">
+        <button type="button" class="nav-tab active" id="catManga" onclick="document.getElementById('catManga').classList.add('active');document.getElementById('catNovel').classList.remove('active');onCategoryChange('manga')">📘 만화</button>
+        <button type="button" class="nav-tab" id="catNovel" onclick="document.getElementById('catNovel').classList.add('active');document.getElementById('catManga').classList.remove('active');onCategoryChange('novel')">📝 소설</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>제목</label>
+      <input type="text" id="pTitle" placeholder="동인지 제목">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>조합 (커플링)</label>
+        <input type="text" id="pPairing" placeholder="A×B">
+      </div>
+      <div class="form-group" id="mangaFields">
+        <label>총 페이지 수</label>
+        <input type="number" id="pPages" placeholder="24" min="1">
+      </div>
+      <div class="form-group" id="novelFields" style="display:none">
+        <label>총 페이지 수</label>
+        <input type="number" id="pNovelPages" placeholder="100" min="1">
+      </div>
+    </div>
+    <div id="novelExtraFields" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label>글자 수 (목표)</label>
+          <input type="number" id="pWordCount" placeholder="50000" min="0">
+        </div>
+        <div class="form-group">
+          <label>집필 기록 단위</label>
+          <div class="nav-tabs" style="display:inline-flex;margin-top:4px;">
+            <button type="button" class="nav-tab active" id="unitChars" onclick="document.getElementById('unitChars').classList.add('active');document.getElementById('unitPages').classList.remove('active')">글자 수</button>
+            <button type="button" class="nav-tab" id="unitPages" onclick="document.getElementById('unitPages').classList.add('active');document.getElementById('unitChars').classList.remove('active')">페이지 수</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>발행일</label>
+        <input type="date" id="pDate">
+      </div>
+      <div class="form-group">
+        <label>유형</label>
+        <select id="pType">
+          <option value="">미정</option>
+          <option value="행사">행사</option>
+          <option value="통판">통판</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>발행 행사</label>
+        <input type="text" id="pEvent" placeholder="D.festa 33">
+      </div>
+      <div class="form-group">
+        <label>가격</label>
+        <input type="text" id="pPrice" placeholder="500">
+      </div>
+    </div>
+    <div id="mangaDeadlines">
+      <div class="deadline-section-title">📅 단계별 마감일 (선택)</div>
+      <div class="deadlines-grid">
+        <div class="form-group"><label>📋 콘티 마감</label><input type="date" id="pDlConti"></div>
+        <div class="form-group"><label>✏️ 러프 마감</label><input type="date" id="pDlRough"></div>
+        <div class="form-group"><label>🖊 작화 마감</label><input type="date" id="pDlArtwork"></div>
+        <div class="form-group"><label>🔍 퇴고 마감</label><input type="date" id="pDlReview"></div>
+        <div class="form-group"><label>📦 입고일</label><input type="date" id="pDlSubmission"></div>
+      </div>
+    </div>
+    <div id="novelDeadlines" style="display:none">
+      <div class="deadline-section-title">📅 단계별 마감일 (선택)</div>
+      <div class="deadlines-grid">
+        <div class="form-group"><label>✍️ 집필 마감</label><input type="date" id="pDlWriting"></div>
+        <div class="form-group"><label>🔍 퇴고 마감</label><input type="date" id="pDlNProof"></div>
+        <div class="form-group"><label>📦 입고일</label><input type="date" id="pDlNSubmission"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" onclick="createProject()">생성</button>
+    </div>`);
+
+  // 카테고리 변경 시 소설 전용 필드도 토글
+  const origOnCat = onCategoryChange;
+  onCategoryChange = function(cat) {
+    origOnCat(cat);
+    document.getElementById('novelExtraFields').style.display = cat === 'novel' ? '' : 'none';
+  };
+
+  setTimeout(() => document.getElementById('pTitle')?.focus(), 100);
+}
+
+function createProject() {
+  const title = document.getElementById('pTitle').value.trim();
+  if (!title) return;
+
+  const isNovel = document.getElementById('catNovel').classList.contains('active');
+  const category = isNovel ? 'novel' : 'manga';
+
+  const project = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    category,
+    title,
+    pairing: document.getElementById('pPairing').value.trim(),
+    publishDate: document.getElementById('pDate').value,
+    type: document.getElementById('pType').value,
+    event: document.getElementById('pEvent').value.trim(),
+    price: document.getElementById('pPrice').value.trim(),
+    cover: null,
+    plot: { done: false, time: 0 },
+    reviews: [],
+    createdAt: new Date().toISOString()
+  };
+
+  if (isNovel) {
+    project.pages = parseInt(document.getElementById('pNovelPages').value) || 0;
+    project.wordCount = parseInt(document.getElementById('pWordCount').value) || 0;
+    project.writingUnit = document.getElementById('unitPages').classList.contains('active') ? 'pages' : 'chars';
+    project.writingLogs = [];
+    project.writing = { done: false, time: 0 };
+    project.proofreading = { done: false, time: 0 };
+    project.deadlines = {
+      writing: document.getElementById('pDlWriting')?.value || '',
+      proofreading: document.getElementById('pDlNProof')?.value || '',
+      submission: document.getElementById('pDlNSubmission')?.value || ''
+    };
+  } else {
+    const pages = parseInt(document.getElementById('pPages').value) || 0;
+    project.pages = pages;
+    const makePages = () => Array.from({length: pages}, () => ({done:false, time:0}));
+    project.conti = makePages();
+    project.rough = makePages();
+    project.artwork = makePages();
+    project.dailyGoals = {};
+    project.deadlines = {
+      conti: document.getElementById('pDlConti')?.value || '',
+      rough: document.getElementById('pDlRough')?.value || '',
+      artwork: document.getElementById('pDlArtwork')?.value || '',
+      review: document.getElementById('pDlReview')?.value || '',
+      submission: document.getElementById('pDlSubmission')?.value || ''
+    };
+  }
+
+  projects.push(project);
+  save();
+  closeModal();
+  renderProjectList();
+  notify('프로젝트가 생성됐어요!');
+}
+
+function openEditProjectModal() {
+  const p = getProject();
+  const isNovel = p.category === 'novel';
+  openModal(`
+    <h2>✏️ 프로젝트 수정</h2>
+    <div class="form-group">
+      <label>카테고리</label>
+      <span class="badge ${isNovel ? 'badge-novel' : 'badge-manga'}" style="font-size:12px;padding:4px 10px;">${isNovel ? '📝 소설' : '📘 만화'}</span>
+    </div>
+    <div class="form-group">
+      <label>제목</label>
+      <input type="text" id="eTitle" value="${esc(p.title)}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>조합 (커플링)</label>
+        <input type="text" id="ePairing" value="${esc(p.pairing||'')}">
+      </div>
+      <div class="form-group">
+        <label>총 페이지 수</label>
+        <input type="number" id="ePages" value="${p.pages||''}" min="1">
+      </div>
+    </div>
+    ${isNovel ? `<div class="form-row"><div class="form-group"><label>글자 수 (목표)</label><input type="number" id="eWordCount" value="${p.wordCount||''}" min="0"></div><div class="form-group"><label>집필 기록 단위</label><span class="badge" style="font-size:12px;padding:4px 10px;background:var(--bg);color:var(--text-sub);">${p.writingUnit==='pages'?'📄 페이지 수':'✍️ 글자 수'}</span></div></div>` : `<p style="font-size:12px;color:var(--text-light);margin-top:8px;">⚠️ 페이지 수를 변경하면 기존 트래킹 데이터가 조정돼요.</p>`}
+    <div class="form-row">
+      <div class="form-group">
+        <label>발행일</label>
+        <input type="date" id="eDate" value="${p.publishDate||''}">
+      </div>
+      <div class="form-group">
+        <label>유형</label>
+        <select id="eType">
+          <option value="" ${!p.type?'selected':''}>미정</option>
+          <option value="행사" ${p.type==='행사'?'selected':''}>행사</option>
+          <option value="통판" ${p.type==='통판'?'selected':''}>통판</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>발행 행사</label>
+        <input type="text" id="eEvent" value="${esc(p.event||'')}">
+      </div>
+      <div class="form-group">
+        <label>가격</label>
+        <input type="text" id="ePrice" value="${esc(p.price||'')}">
+      </div>
+    </div>
+    ${isNovel ? `
+    <div class="deadline-section-title">📅 단계별 마감일</div>
+    <div class="deadlines-grid">
+      <div class="form-group"><label>✍️ 집필 마감</label><input type="date" id="eDlWriting" value="${p.deadlines?.writing||''}"></div>
+      <div class="form-group"><label>🔍 퇴고 마감</label><input type="date" id="eDlProof" value="${p.deadlines?.proofreading||''}"></div>
+      <div class="form-group"><label>📦 입고일</label><input type="date" id="eDlSubmission" value="${p.deadlines?.submission||''}"></div>
+    </div>` : `
+    <div class="deadline-section-title">📅 단계별 마감일</div>
+    <div class="deadlines-grid">
+      <div class="form-group"><label>📋 콘티 마감</label><input type="date" id="eDlConti" value="${p.deadlines?.conti||''}"></div>
+      <div class="form-group"><label>✏️ 러프 마감</label><input type="date" id="eDlRough" value="${p.deadlines?.rough||''}"></div>
+      <div class="form-group"><label>🖊 작화 마감</label><input type="date" id="eDlArtwork" value="${p.deadlines?.artwork||''}"></div>
+      <div class="form-group"><label>🔍 퇴고 마감</label><input type="date" id="eDlReview" value="${p.deadlines?.review||''}"></div>
+      <div class="form-group"><label>📦 입고일</label><input type="date" id="eDlSubmission" value="${p.deadlines?.submission||''}"></div>
+    </div>`}
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" onclick="updateProject()">저장</button>
+    </div>`);
+}
+
+function updateProject() {
+  const p = getProject();
+  p.title = document.getElementById('eTitle').value.trim() || p.title;
+  p.pairing = document.getElementById('ePairing').value.trim();
+  p.publishDate = document.getElementById('eDate').value;
+  p.type = document.getElementById('eType').value;
+  p.event = document.getElementById('eEvent')?.value.trim() || '';
+  p.price = document.getElementById('ePrice')?.value.trim() || '';
+
+  if (!p.deadlines) p.deadlines = {};
+
+  if (p.category === 'novel') {
+    p.wordCount = parseInt(document.getElementById('eWordCount')?.value) || 0;
+    p.deadlines.writing = document.getElementById('eDlWriting')?.value || '';
+    p.deadlines.proofreading = document.getElementById('eDlProof')?.value || '';
+    p.deadlines.submission = document.getElementById('eDlSubmission')?.value || '';
+  } else {
+    p.deadlines.conti = document.getElementById('eDlConti')?.value || '';
+    p.deadlines.rough = document.getElementById('eDlRough')?.value || '';
+    p.deadlines.artwork = document.getElementById('eDlArtwork')?.value || '';
+    p.deadlines.review = document.getElementById('eDlReview')?.value || '';
+    p.deadlines.submission = document.getElementById('eDlSubmission')?.value || '';
+  }
+
+  const newPages = parseInt(document.getElementById('ePages').value) || p.pages;
+  if (newPages !== p.pages) {
+    if (p.category !== 'novel') {
+      ['conti','rough','artwork'].forEach(ph => {
+        const old = p[ph] || [];
+        p[ph] = Array.from({length: newPages}, (_, i) => old[i] || {done:false, time:0});
+      });
+    }
+    p.pages = newPages;
+  }
+
+  save();
+  closeModal();
+  renderDetail();
+  notify('프로젝트가 수정됐어요!');
+}
+
+function confirmDeleteProject() {
+  const p = getProject();
+  openModal(`
+    <h2>🗑 프로젝트 삭제</h2>
+    <p class="confirm-text">「${esc(p.title)}」을(를) 삭제할까요?<br>이 작업은 되돌릴 수 없어요.</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" style="background:var(--red);border-color:var(--red);" onclick="deleteProject()">삭제</button>
+    </div>`);
+}
+
+function deleteProject() {
+  projects = projects.filter(p => p.id !== currentProjectId);
+  save();
+  closeModal();
+  showView('list');
+  notify('프로젝트가 삭제됐어요.');
+}
+
+// ========== POMODORO ==========
+function togglePomodoro() {
+  document.getElementById('pomoWidget').classList.toggle('hidden');
+  document.getElementById('pomoToggle').classList.toggle('hidden');
+}
+
+function pomoAction(action) {
+  if (action === 'start') {
+    if (pomo.running) return;
+    pomo.running = true;
+    pomo.endTime = Date.now() + pomo.timeLeft * 1000;
+    pomo.interval = setInterval(pomoTick, 250);
+  } else if (action === 'pause') {
+    if (!pomo.running) return;
+    pomo.running = false;
+    clearInterval(pomo.interval);
+    // Freeze remaining time
+    pomo.timeLeft = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
+    pomo.endTime = null;
+  } else if (action === 'reset') {
+    pomo.running = false;
+    clearInterval(pomo.interval);
+    pomo.isBreak = false;
+    pomo.timeLeft = WORK_MIN * 60;
+    pomo.endTime = null;
+    updatePomoDisplay();
+  }
+}
+
+function pomoTick() {
+  if (!pomo.running || !pomo.endTime) return;
+  const remaining = Math.round((pomo.endTime - Date.now()) / 1000);
+  pomo.timeLeft = Math.max(0, remaining);
+
+  if (pomo.timeLeft <= 0) {
+    clearInterval(pomo.interval);
+    pomo.running = false;
+    pomo.endTime = null;
+
+    // Sound
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = pomo.isBreak ? 523 : 659;
+      gain.gain.value = 0.3;
+      osc.start();
+      setTimeout(() => { osc.stop(); ctx.close(); }, 300);
+    } catch(e) {}
+
+    if (pomo.isBreak) {
+      pomo.isBreak = false;
+      pomo.timeLeft = WORK_MIN * 60;
+      notify('🍅 휴식 끝! 다시 작업 시간이에요.');
+    } else {
+      pomo.isBreak = true;
+      pomo.timeLeft = BREAK_MIN * 60;
+      notify('☕ 수고했어요! 5분 쉬어가세요.');
+    }
+  }
+  updatePomoDisplay();
+}
+
+function updatePomoDisplay() {
+  const m = Math.floor(pomo.timeLeft / 60);
+  const s = pomo.timeLeft % 60;
+  const el = document.getElementById('pomoTime');
+  el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  el.className = `pomodoro-time ${pomo.isBreak ? 'break-mode' : 'work-mode'}`;
+  document.getElementById('pomoLabel').textContent = pomo.isBreak ? '☕ 휴식 시간' : '🍅 작업 시간';
+}
+
+// ========== IMPORT/EXPORT ==========
+function exportData() {
+  const exportObj = { projects, dailyLog };
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `doujinshi-tracker-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  notify('데이터를 내보냈어요!');
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      // Support both old format (array) and new format ({projects, dailyLog})
+      if (Array.isArray(data)) {
+        projects = data;
+      } else if (data.projects && Array.isArray(data.projects)) {
+        projects = data.projects;
+        if (data.dailyLog) { dailyLog = data.dailyLog; saveDailyLog(); }
+      } else { alert('올바른 형식이 아니에요.'); return; }
+      projects.forEach(p => { if (!p.category) p.category = 'manga'; });
+      save();
+      renderProjectList();
+      updateTodayDisplay();
+      notify('데이터를 불러왔어요!');
+    } catch(err) { alert('파일을 읽을 수 없어요.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ========== START ==========
+init();
+</script>
+</body>
+</html>

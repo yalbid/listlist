@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>웹소설 제작 트래커</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #f6f3ee;
+    --bg-card: #ffffff;
+    --bg-hover: #faf8f5;
+    --text: #2c2825;
+    --text-sub: #7a7168;
+    --text-light: #a89f94;
+    --accent: #c47a5a;
+    --accent-light: #f0d9cc;
+    --accent-dark: #a05e3f;
+    --border: #e5ded5;
+    --border-light: #efe9e1;
+    --green: #6a9e78;
+    --green-light: #e0eddf;
+    --blue: #5a7fa0;
+    --blue-light: #dce6ef;
+    --red: #c45a5a;
+    --red-light: #f0d0d0;
+    --shadow: 0 1px 3px rgba(44,40,37,0.06);
+    --shadow-md: 0 4px 12px rgba(44,40,37,0.08);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  [data-theme="dark"] {
+    --bg: #1a1525;
+    --bg-card: #231e30;
+    --bg-hover: #2c2640;
+    --text: #e8e2f0;
+    --text-sub: #9d93b0;
+    --text-light: #6e6482;
+    --accent: #a78bda;
+    --accent-light: #352d4a;
+    --accent-dark: #c4aef0;
+    --border: #352d4a;
+    --border-light: #2c2640;
+    --green: #7bc48e;
+    --green-light: #1e2e24;
+    --blue: #7ba4c8;
+    --blue-light: #1e2834;
+    --red: #d47272;
+    --red-light: #3a2020;
+    --shadow: 0 1px 3px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Zen Maru Gothic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+
+  .header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 18px; font-weight: 700; white-space: nowrap; }
+  .header h1 span { color: var(--accent); }
+
+  .nav-tabs { display: flex; gap: 2px; }
+  .nav-tab {
+    background: none; border: none; padding: 6px 14px; font-size: 13px;
+    color: var(--text-sub); cursor: pointer; border-radius: var(--radius-sm);
+    font-family: inherit; transition: all 0.2s;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active {
+    background: var(--bg-card); color: var(--text);
+    box-shadow: var(--shadow); font-weight: 500;
+  }
+
+  .header-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+  .today-time {
+    font-size: 12px; font-weight: 500; color: var(--text-sub);
+    padding: 4px 10px; border-radius: 20px;
+    background: var(--bg); border: 1px solid var(--border-light);
+    transition: all 0.3s;
+  }
+  .today-time.recording {
+    color: var(--accent); border-color: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  .btn {
+    padding: 6px 12px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--text-sub); cursor: pointer; font-family: inherit;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: white; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-danger { color: var(--red); }
+  .btn-danger:hover { border-color: var(--red); color: var(--red); }
+
+  .main { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Project Cards */
+  .project-grid { display: flex; flex-direction: column; gap: 12px; }
+
+  .project-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; cursor: pointer;
+    transition: all 0.2s; box-shadow: var(--shadow);
+  }
+  .project-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
+
+  .project-card-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .project-card-meta { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; }
+
+  .progress-bar-container {
+    height: 6px; background: var(--border-light); border-radius: 3px;
+    overflow: hidden; margin-bottom: 8px;
+  }
+  .progress-bar {
+    height: 100%; border-radius: 3px; transition: width 0.3s;
+    background: var(--accent);
+  }
+  .progress-bar.complete { background: var(--green); }
+
+  .project-card-stats {
+    display: flex; gap: 12px; font-size: 11px; color: var(--text-light);
+    flex-wrap: wrap;
+  }
+  .stat-item { display: flex; align-items: center; gap: 3px; }
+
+  /* Detail View */
+  .back-btn {
+    background: none; border: none; color: var(--text-sub); font-size: 13px;
+    cursor: pointer; padding: 6px 0; font-family: inherit; margin-bottom: 12px;
+  }
+  .back-btn:hover { color: var(--accent); }
+
+  .detail-header {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .detail-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .detail-title { font-size: 20px; font-weight: 700; }
+  .detail-meta { font-size: 12px; color: var(--text-sub); margin-bottom: 12px; }
+
+  .plot-section {
+    background: var(--bg); border-radius: var(--radius-sm);
+    padding: 12px; margin-bottom: 12px;
+  }
+  .plot-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .plot-label { font-size: 13px; font-weight: 500; }
+
+  .status-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    font-weight: 500; display: inline-block;
+  }
+  .status-not-started { background: var(--border-light); color: var(--text-light); }
+  .status-in-progress { background: var(--blue-light); color: var(--blue); }
+  .status-done { background: var(--green-light); color: var(--green); }
+  .status-revising { background: var(--accent-light); color: var(--accent); }
+
+  .summary-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    font-size: 13px; color: var(--text-sub);
+  }
+
+  /* Chapter list */
+  .chapter-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .chapter-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  .chapter-card:hover { border-color: var(--accent); }
+
+  .ch-left { flex: 1; min-width: 0; }
+  .ch-num { font-size: 11px; color: var(--text-light); margin-bottom: 2px; }
+  .ch-title { font-size: 14px; font-weight: 500; }
+  .ch-info { font-size: 11px; color: var(--text-sub); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .ch-right { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+  .word-progress {
+    font-size: 11px; color: var(--text-sub); text-align: right;
+    min-width: 70px;
+  }
+  .word-pct { font-weight: 600; }
+  .word-pct.complete { color: var(--green); }
+
+  /* Chapter Detail */
+  .ch-detail-section {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .ch-detail-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+
+  .phase-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid var(--border-light); flex-wrap: wrap;
+  }
+  .phase-row:last-child { border-bottom: none; }
+  .phase-name { font-size: 13px; font-weight: 500; min-width: 50px; }
+  .phase-time { font-size: 12px; color: var(--text-sub); }
+
+  .word-input-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .word-input-row label { font-size: 13px; font-weight: 500; min-width: 70px; }
+  .word-input {
+    width: 120px; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 14px; font-family: inherit;
+    background: var(--bg); color: var(--text); text-align: right;
+  }
+  .word-input:focus { outline: none; border-color: var(--accent); }
+
+  /* Session Log */
+  .session-list { max-height: 200px; overflow-y: auto; }
+  .session-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid var(--border-light);
+    font-size: 12px;
+  }
+  .session-item:last-child { border-bottom: none; }
+  .session-date { color: var(--text-sub); }
+  .session-phase { font-size: 11px; }
+  .session-duration { font-weight: 500; }
+  .session-del {
+    background: none; border: none; color: var(--text-light);
+    cursor: pointer; font-size: 11px; padding: 2px 4px;
+  }
+  .session-del:hover { color: var(--red); }
+
+  .date-summary {
+    font-size: 12px; color: var(--text-sub); padding: 8px 0;
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+
+  /* Memo */
+  .memo-area {
+    width: 100%; min-height: 80px; padding: 10px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-family: inherit; font-size: 13px;
+    background: var(--bg); color: var(--text); resize: vertical;
+  }
+  .memo-area:focus { outline: none; border-color: var(--accent); }
+
+  /* Pomodoro */
+  .pomodoro {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px;
+    box-shadow: var(--shadow-md); z-index: 200; min-width: 220px;
+    text-align: center;
+  }
+  .pomodoro-label { font-size: 12px; color: var(--text-sub); margin-bottom: 6px; }
+  .pomodoro-time {
+    font-size: 36px; font-weight: 300; font-family: 'Zen Maru Gothic', sans-serif;
+    letter-spacing: 2px; margin-bottom: 10px;
+  }
+  .pomodoro-time.work-mode { color: var(--accent); }
+  .pomodoro-time.break-mode { color: var(--green); }
+
+  .pomodoro-controls { display: flex; justify-content: center; gap: 8px; }
+  .pomo-btn {
+    padding: 6px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg-card); color: var(--text); cursor: pointer;
+    font-family: inherit; font-size: 12px; transition: all 0.2s;
+  }
+  .pomo-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .pomo-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  .pomo-phase-select {
+    margin-top: 8px; display: flex; gap: 4px; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .pomo-phase-btn {
+    padding: 3px 8px; font-size: 10px; border: 1px solid var(--border);
+    border-radius: 10px; background: none; color: var(--text-sub);
+    cursor: pointer; font-family: inherit;
+  }
+  .pomo-phase-btn.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+
+  .pomodoro-toggle {
+    position: fixed; bottom: 20px; right: 20px;
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--accent); color: white; border: none;
+    font-size: 22px; cursor: pointer; box-shadow: var(--shadow-md);
+    z-index: 199; transition: transform 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pomodoro-toggle:hover { transform: scale(1.05); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    z-index: 300; display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--bg-card); border-radius: var(--radius);
+    padding: 24px; max-width: 420px; width: 100%;
+    box-shadow: var(--shadow-md);
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; }
+  .modal-field { margin-bottom: 12px; }
+  .modal-field label { display: block; font-size: 12px; color: var(--text-sub); margin-bottom: 4px; }
+  .modal-field input, .modal-field select, .modal-field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-family: inherit; font-size: 13px;
+    background: var(--bg); color: var(--text);
+  }
+  .modal-field textarea { min-height: 60px; resize: vertical; }
+  .modal-field input:focus, .modal-field select:focus, .modal-field textarea:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  .notification {
+    position: fixed; top: 70px; right: 20px;
+    background: var(--bg-card); border: 1px solid var(--green);
+    color: var(--green); padding: 10px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; z-index: 400; opacity: 0;
+    transform: translateX(20px); transition: all 0.3s;
+    pointer-events: none;
+  }
+  .notification.show { opacity: 1; transform: translateX(0); }
+
+  .empty-state {
+    text-align: center; color: var(--text-light);
+    padding: 40px 20px; font-size: 14px;
+  }
+
+  .hidden { display: none !important; }
+
+  .add-project-btn {
+    width: 100%; padding: 14px; border: 2px dashed var(--border);
+    border-radius: var(--radius); background: none; color: var(--text-light);
+    font-size: 14px; cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  .add-project-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .manual-session-row {
+    display: flex; gap: 6px; align-items: center; margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .manual-input {
+    width: 60px; padding: 4px 6px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 12px; text-align: center;
+    background: var(--bg); color: var(--text); font-family: inherit;
+  }
+  .manual-input:focus { outline: none; border-color: var(--accent); }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>✍️ <span>웹소설</span> 트래커</h1>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showView('list')">프로젝트</button>
+      <button class="nav-tab" onclick="showView('archive')">아카이브</button>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="today-time" id="todayTime" title="오늘 누적 작업시간">⏱ 0m</div>
+    <button class="btn" id="themeToggle" onclick="toggleTheme()" title="테마 전환">🌙</button>
+    <button class="btn" onclick="exportData()">📁 내보내기</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">📂 불러오기</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<div class="main">
+  <!-- Project List -->
+  <div class="view active" id="view-list">
+    <div class="project-grid" id="projectGrid"></div>
+  </div>
+
+  <!-- Archive -->
+  <div class="view" id="view-archive">
+    <div class="project-grid" id="archiveGrid"></div>
+    <div class="empty-state" id="archiveEmpty">아직 완료된 프로젝트가 없어요.</div>
+  </div>
+
+  <!-- Project Detail -->
+  <div class="view" id="view-detail"></div>
+
+  <!-- Chapter Detail -->
+  <div class="view" id="view-chapter"></div>
+</div>
+
+<!-- Pomodoro Toggle -->
+<button class="pomodoro-toggle" id="pomoToggle" onclick="togglePomodoro()">🍅</button>
+
+<!-- Pomodoro Widget -->
+<div class="pomodoro hidden" id="pomoWidget">
+  <div class="pomodoro-label" id="pomoLabel">🍅 작업 시간</div>
+  <div class="pomodoro-time work-mode" id="pomoTime">25:00</div>
+  <div class="pomodoro-controls">
+    <button class="pomo-btn" id="pomoStartBtn" onclick="pomoStart()">시작</button>
+    <button class="pomo-btn" onclick="pomoReset()">리셋</button>
+    <button class="pomo-btn" onclick="togglePomodoro()" title="닫기" style="font-size:11px;">✕</button>
+  </div>
+  <div class="pomo-phase-select" id="pomoPhaseSelect">
+    <button class="pomo-phase-btn active" onclick="setPomoPhase('writing')">집필</button>
+    <button class="pomo-phase-btn" onclick="setPomoPhase('revision')">퇴고</button>
+    <button class="pomo-phase-btn" onclick="setPomoPhase('plot')">플롯</button>
+  </div>
+</div>
+
+<!-- Modal Container -->
+<div id="modalContainer"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ========== Firebase 동기화 ==========
+const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
+const _fbDb=_fbApp.firestore();
+
+function _syncNovelToFirebase() {
+  try {
+    _fbDb.collection('trackerSync').doc('novel').set({
+      dailyLog: dailyLog,
+      dailyWritingLog: dailyWritingLog,
+      updatedAt: Date.now()
+    }, { merge: true }).catch(e => console.warn('Firebase sync failed:', e));
+  } catch(e) { console.warn('Novel Firebase sync error:', e); }
+}
+
+// ========== STATE ==========
+let projects = [];
+let dailyLog = {};
+let dailyWritingLog = {};
+let currentProjectId = null;
+let currentChapterId = null;
+
+// Pomodoro
+let pomo = { running: false, timeLeft: 25 * 60, endTime: null, isBreak: false, interval: null, phase: 'writing' };
+const WORK_MIN = 25;
+const BREAK_MIN = 5;
+
+// ========== THEME ==========
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  saveTheme(next);
+}
+function saveTheme(theme) {
+  if (!db) return;
+  try { const tx = db.transaction(STORE_NAME, 'readwrite'); tx.objectStore(STORE_NAME).put({ key: 'theme', value: theme }); } catch(e) {}
+}
+function loadTheme() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get('theme');
+    req.onsuccess = () => { if (req.result && req.result.value) applyTheme(req.result.value); };
+  } catch(e) {}
+}
+
+// ========== STORAGE (IndexedDB) ==========
+const DB_NAME = 'novel-tracker-db';
+const DB_VERSION = 1;
+const STORE_NAME = 'store';
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_NAME)) {
+        d.createObjectStore(STORE_NAME, { keyPath: 'key' });
+      }
+    };
+    request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+    request.onerror = (e) => reject(e);
+  });
+}
+
+async function init() {
+  try {
+    await openDB();
+    loadTheme();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+
+    const reqData = store.get('data');
+    reqData.onsuccess = () => {
+      if (reqData.result && reqData.result.value) projects = reqData.result.value;
+      renderProjectList();
+    };
+    reqData.onerror = () => renderProjectList();
+
+    const reqLog = store.get('dailyLog');
+    reqLog.onsuccess = () => {
+      if (reqLog.result && reqLog.result.value) dailyLog = reqLog.result.value;
+      updateTodayDisplay();
+    };
+
+    const reqWLog = store.get('dailyWritingLog');
+    reqWLog.onsuccess = () => {
+      if (reqWLog.result && reqWLog.result.value) dailyWritingLog = reqWLog.result.value;
+    };
+  } catch(e) {
+    console.error('Init error:', e);
+    renderProjectList();
+  }
+  setInterval(updateTodayDisplay, 1000);
+}
+
+function save() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({ key: 'data', value: projects });
+  } catch(e) { console.error('Save error:', e); }
+}
+function saveDailyLog() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({ key: 'dailyLog', value: dailyLog });
+    _syncNovelToFirebase();
+  } catch(e) {}
+}
+function saveDailyWritingLog() {
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({ key: 'dailyWritingLog', value: dailyWritingLog });
+    _syncNovelToFirebase();
+  } catch(e) {}
+}
+
+// ========== DAILY LOG ==========
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function logDailyTime(seconds) {
+  const key = todayKey();
+  dailyLog[key] = (dailyLog[key] || 0) + seconds;
+  saveDailyLog();
+  updateTodayDisplay();
+}
+function getTodayTotal() {
+  const saved = dailyLog[todayKey()] || 0;
+  let live = 0;
+  if (pomo.running && !pomo.isBreak) {
+    live = Math.floor((Date.now() - (pomo.endTime - pomo.timeLeft * 1000)) / 1000);
+    live = Math.max(0, (WORK_MIN * 60) - pomo.timeLeft);
+  }
+  return saved + live;
+}
+function updateTodayDisplay() {
+  const el = document.getElementById('todayTime');
+  if (!el) return;
+  const total = getTodayTotal();
+  el.textContent = `⏱ 오늘 ${fmtTimeShort(total)}`;
+  el.classList.toggle('recording', pomo.running && !pomo.isBreak);
+}
+
+// ========== UTILS ==========
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function fmtTimeShort(sec) {
+  if (sec < 60) return `${sec}s`;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+function fmtTimeFull(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}시간 ${m}분`;
+  if (m > 0) return `${m}분 ${s}초`;
+  return `${s}초`;
+}
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtDateTime(ts) {
+  const d = new Date(ts);
+  return `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function statusText(status) {
+  const map = {
+    'not-started': '미착수', 'in-progress': '진행중', 'draft-done': '초고완료',
+    'revising': '퇴고중', 'done': '완료'
+  };
+  return map[status] || status;
+}
+function statusClass(status) {
+  if (status === 'not-started') return 'status-not-started';
+  if (status === 'done' || status === 'draft-done') return 'status-done';
+  if (status === 'revising') return 'status-revising';
+  return 'status-in-progress';
+}
+function phaseText(phase) {
+  return { plot: '플롯', writing: '집필', revision: '퇴고' }[phase] || phase;
+}
+
+function notify(msg) {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ========== PROJECT HELPERS ==========
+function getProject(id) { return projects.find(p => p.id === id); }
+
+function getProjectTotalTime(p) {
+  let t = p.plot?.time || 0;
+  (p.chapters || []).forEach(ch => {
+    t += (ch.writing?.time || 0) + (ch.revision?.time || 0);
+  });
+  return t;
+}
+function getProjectTotalWords(p) {
+  return (p.chapters || []).reduce((s, ch) => s + (ch.currentWords || 0), 0);
+}
+function getProjectTargetWords(p) {
+  return (p.chapters || []).reduce((s, ch) => s + (ch.targetWords || 0), 0);
+}
+function getProjectWordPct(p) {
+  const target = getProjectTargetWords(p);
+  if (target === 0) return 0;
+  return Math.min(100, Math.round(getProjectTotalWords(p) / target * 100));
+}
+function getChapterSessions(p, chId) {
+  const ch = (p.chapters || []).find(c => c.id === chId);
+  return ch ? (ch.sessions || []) : [];
+}
+
+// ========== VIEWS ==========
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+
+  if (name === 'list') {
+    document.getElementById('view-list').classList.add('active');
+    document.querySelector('.nav-tab:nth-child(1)').classList.add('active');
+    renderProjectList();
+  } else if (name === 'archive') {
+    document.getElementById('view-archive').classList.add('active');
+    document.querySelector('.nav-tab:nth-child(2)').classList.add('active');
+    renderArchive();
+  } else if (name === 'detail') {
+    document.getElementById('view-detail').classList.add('active');
+    renderProjectDetail();
+  } else if (name === 'chapter') {
+    document.getElementById('view-chapter').classList.add('active');
+    renderChapterDetail();
+  }
+}
+
+// ========== PROJECT LIST ==========
+function renderProjectList() {
+  const grid = document.getElementById('projectGrid');
+  const active = projects.filter(p => !p.archived);
+
+  let html = '';
+  active.forEach(p => {
+    const totalWords = getProjectTotalWords(p);
+    const targetWords = getProjectTargetWords(p);
+    const pct = getProjectWordPct(p);
+    const totalTime = getProjectTotalTime(p);
+    const chCount = (p.chapters || []).length;
+    const doneCount = (p.chapters || []).filter(ch => ch.revision?.status === 'done').length;
+
+    html += `<div class="project-card" onclick="openProject('${p.id}')">
+      <div class="project-card-title">${esc(p.title)}</div>
+      <div class="project-card-meta">${p.genre ? esc(p.genre) + ' · ' : ''}${chCount}화 (완료 ${doneCount}화)</div>
+      <div class="progress-bar-container"><div class="progress-bar${pct >= 100 ? ' complete' : ''}" style="width:${pct}%"></div></div>
+      <div class="project-card-stats">
+        <span class="stat-item">📝 ${totalWords.toLocaleString()}${targetWords > 0 ? ' / ' + targetWords.toLocaleString() + '자' : '자'}</span>
+        <span class="stat-item">⏱ ${fmtTimeShort(totalTime)}</span>
+        <span class="stat-item">플롯 <span class="status-badge ${statusClass(p.plot?.status || 'not-started')}">${statusText(p.plot?.status || 'not-started')}</span></span>
+      </div>
+    </div>`;
+  });
+
+  html += `<button class="add-project-btn" onclick="openProjectModal(null)">+ 새 프로젝트</button>`;
+  grid.innerHTML = html;
+}
+
+// ========== ARCHIVE ==========
+function renderArchive() {
+  const grid = document.getElementById('archiveGrid');
+  const archived = projects.filter(p => p.archived);
+  const emptyEl = document.getElementById('archiveEmpty');
+
+  if (archived.length === 0) {
+    grid.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  let html = '';
+  archived.forEach(p => {
+    const totalWords = getProjectTotalWords(p);
+    const totalTime = getProjectTotalTime(p);
+    const chCount = (p.chapters || []).length;
+    html += `<div class="project-card" onclick="openProject('${p.id}')">
+      <div class="project-card-title">${esc(p.title)}</div>
+      <div class="project-card-meta">${p.genre ? esc(p.genre) + ' · ' : ''}${chCount}화 · 아카이브</div>
+      <div class="project-card-stats">
+        <span class="stat-item">📝 ${totalWords.toLocaleString()}자</span>
+        <span class="stat-item">⏱ ${fmtTimeShort(totalTime)}</span>
+      </div>
+    </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+// ========== PROJECT DETAIL ==========
+function openProject(id) {
+  currentProjectId = id;
+  showView('detail');
+}
+
+function renderProjectDetail() {
+  const p = getProject(currentProjectId);
+  if (!p) { showView('list'); return; }
+
+  const totalWords = getProjectTotalWords(p);
+  const targetWords = getProjectTargetWords(p);
+  const pct = getProjectWordPct(p);
+  const totalTime = getProjectTotalTime(p);
+
+  let html = `
+    <button class="back-btn" onclick="showView('${p.archived ? 'archive' : 'list'}')">← ${p.archived ? '아카이브' : '목록'}으로</button>
+    <div class="detail-header">
+      <div class="detail-title-row">
+        <div class="detail-title">${esc(p.title)}</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" onclick="openProjectModal('${p.id}')">✏️ 수정</button>
+          <button class="btn btn-sm" onclick="toggleArchive('${p.id}')">${p.archived ? '📤 복원' : '📥 아카이브'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteProject('${p.id}')">🗑</button>
+        </div>
+      </div>
+      ${p.genre ? `<div class="detail-meta">${esc(p.genre)}${p.memo ? ' · ' + esc(p.memo) : ''}</div>` : (p.memo ? `<div class="detail-meta">${esc(p.memo)}</div>` : '')}
+
+      <div class="plot-section">
+        <div class="plot-row">
+          <span class="plot-label">📋 플롯</span>
+          <span class="status-badge ${statusClass(p.plot?.status || 'not-started')}">${statusText(p.plot?.status || 'not-started')}</span>
+          <span style="font-size:12px;color:var(--text-sub)">⏱ ${fmtTimeShort(p.plot?.time || 0)}</span>
+          <select onchange="updatePlotStatus('${p.id}', this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-family:inherit;">
+            <option value="not-started" ${(p.plot?.status||'not-started')==='not-started'?'selected':''}>미착수</option>
+            <option value="in-progress" ${p.plot?.status==='in-progress'?'selected':''}>진행중</option>
+            <option value="done" ${p.plot?.status==='done'?'selected':''}>완료</option>
+          </select>
+        </div>
+        <div class="manual-session-row" style="margin-top:6px;">
+          <span style="font-size:12px;color:var(--text-sub)">시간 추가:</span>
+          <input type="number" id="plotManualMin" class="manual-input" placeholder="분" min="1">
+          <button class="btn btn-sm" onclick="addPlotTime('${p.id}')">추가</button>
+        </div>
+      </div>
+
+      <div class="summary-row">
+        <span>📝 ${totalWords.toLocaleString()}${targetWords > 0 ? ' / ' + targetWords.toLocaleString() : ''}자 (${pct}%)</span>
+        <span>⏱ 총 ${fmtTimeShort(totalTime)}</span>
+        <span>📖 ${(p.chapters||[]).length}화</span>
+      </div>
+      ${targetWords > 0 ? `<div class="progress-bar-container" style="margin-top:8px"><div class="progress-bar${pct>=100?' complete':''}" style="width:${pct}%"></div></div>` : ''}
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:14px;font-weight:600;">회차 목록</span>
+      <button class="btn btn-sm btn-primary" onclick="openChapterModal('${p.id}', null)">+ 회차 추가</button>
+    </div>
+
+    <div class="chapter-list">`;
+
+  (p.chapters || []).forEach(ch => {
+    const wPct = ch.targetWords > 0 ? Math.min(100, Math.round((ch.currentWords || 0) / ch.targetWords * 100)) : 0;
+    const chTime = (ch.writing?.time || 0) + (ch.revision?.time || 0);
+    html += `<div class="chapter-card" onclick="openChapter('${p.id}','${ch.id}')">
+      <div class="ch-left">
+        <div class="ch-num">${ch.number}화</div>
+        <div class="ch-title">${esc(ch.title || '(제목 없음)')}</div>
+        <div class="ch-info">
+          <span>집필 <span class="status-badge ${statusClass(ch.writing?.status||'not-started')}">${statusText(ch.writing?.status||'not-started')}</span></span>
+          <span>퇴고 <span class="status-badge ${statusClass(ch.revision?.status||'not-started')}">${statusText(ch.revision?.status||'not-started')}</span></span>
+          <span>⏱ ${fmtTimeShort(chTime)}</span>
+        </div>
+      </div>
+      <div class="ch-right">
+        <div class="word-progress">
+          <div>${(ch.currentWords||0).toLocaleString()} / ${(ch.targetWords||0).toLocaleString()}</div>
+          ${ch.targetWords > 0 ? `<div class="word-pct${wPct>=100?' complete':''}">${wPct}%</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  if ((p.chapters || []).length === 0) {
+    html += `<div class="empty-state">아직 회차가 없어요. 위 버튼으로 추가해보세요!</div>`;
+  }
+  html += `</div>`;
+
+  document.getElementById('view-detail').innerHTML = html;
+}
+
+// ========== CHAPTER DETAIL ==========
+function openChapter(projId, chId) {
+  currentProjectId = projId;
+  currentChapterId = chId;
+  showView('chapter');
+}
+
+function renderChapterDetail() {
+  const p = getProject(currentProjectId);
+  if (!p) { showView('list'); return; }
+  const ch = (p.chapters || []).find(c => c.id === currentChapterId);
+  if (!ch) { showView('detail'); return; }
+
+  const wPct = ch.targetWords > 0 ? Math.min(100, Math.round((ch.currentWords || 0) / ch.targetWords * 100)) : 0;
+  const sessions = (ch.sessions || []).slice().reverse();
+
+  // Date summary
+  const dateSet = new Set(sessions.map(s => fmtDate(s.date)));
+  const totalDays = dateSet.size;
+  const lastSession = sessions.length > 0 ? sessions[0] : null;
+
+  let html = `
+    <button class="back-btn" onclick="showView('detail')">← ${esc(p.title)}</button>
+
+    <!-- Header -->
+    <div class="ch-detail-section">
+      <div class="detail-title-row">
+        <div>
+          <div style="font-size:12px;color:var(--text-light)">${ch.number}화</div>
+          <div style="font-size:18px;font-weight:700;">${esc(ch.title || '(제목 없음)')}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" onclick="openChapterModal('${p.id}','${ch.id}')">✏️ 수정</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteChapter('${p.id}','${ch.id}')">🗑</button>
+        </div>
+      </div>
+
+      <!-- Word Count -->
+      <div style="margin-top:12px;">
+        <div class="word-input-row">
+          <label>현재 글자수</label>
+          <input type="number" class="word-input" value="${ch.currentWords||0}" onchange="updateWords('${p.id}','${ch.id}','current',this.value)" min="0">
+          <span style="font-size:12px;color:var(--text-light)">/ ${(ch.targetWords||0).toLocaleString()}자 목표</span>
+          ${ch.targetWords > 0 ? `<span class="word-pct${wPct>=100?' complete':''}" style="font-size:13px;font-weight:600;">${wPct}%</span>` : ''}
+        </div>
+        ${ch.targetWords > 0 ? `<div class="progress-bar-container"><div class="progress-bar${wPct>=100?' complete':''}" style="width:${wPct}%"></div></div>` : ''}
+      </div>
+    </div>
+
+    <!-- Phases -->
+    <div class="ch-detail-section">
+      <div class="ch-detail-title">공정 현황</div>
+      <div class="phase-row">
+        <span class="phase-name">집필</span>
+        <span class="status-badge ${statusClass(ch.writing?.status||'not-started')}">${statusText(ch.writing?.status||'not-started')}</span>
+        <span class="phase-time">⏱ ${fmtTimeShort(ch.writing?.time||0)}</span>
+        <select onchange="updateChapterPhase('${p.id}','${ch.id}','writing',this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-family:inherit;">
+          <option value="not-started" ${(ch.writing?.status||'not-started')==='not-started'?'selected':''}>미착수</option>
+          <option value="in-progress" ${ch.writing?.status==='in-progress'?'selected':''}>진행중</option>
+          <option value="draft-done" ${ch.writing?.status==='draft-done'?'selected':''}>초고완료</option>
+        </select>
+      </div>
+      <div class="phase-row">
+        <span class="phase-name">퇴고</span>
+        <span class="status-badge ${statusClass(ch.revision?.status||'not-started')}">${statusText(ch.revision?.status||'not-started')}</span>
+        <span class="phase-time">⏱ ${fmtTimeShort(ch.revision?.time||0)}</span>
+        <select onchange="updateChapterPhase('${p.id}','${ch.id}','revision',this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-family:inherit;">
+          <option value="not-started" ${(ch.revision?.status||'not-started')==='not-started'?'selected':''}>미착수</option>
+          <option value="revising" ${ch.revision?.status==='revising'?'selected':''}>퇴고중</option>
+          <option value="done" ${ch.revision?.status==='done'?'selected':''}>완료</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Writing Log -->
+    <div class="ch-detail-section">
+      <div class="ch-detail-title">글자수 기록</div>
+      <div class="manual-session-row">
+        <span style="font-size:12px;color:var(--text-sub)">작업량:</span>
+        <input type="number" id="writingLogInput" class="manual-input" placeholder="글자수" min="1">
+        <span style="font-size:11px;color:var(--text-light)">자</span>
+        <button class="btn btn-sm" onclick="addWritingLog('${p.id}')">추가</button>
+      </div>
+      ${(() => {
+        const tk = todayKey();
+        const todayLogs = (p.writingLogs || []).filter(l => l.date === tk);
+        const todayTotal = todayLogs.reduce((s, l) => s + l.amount, 0);
+        const allTotal = (p.writingLogs || []).reduce((s, l) => s + l.amount, 0);
+        if ((p.writingLogs || []).length === 0) return '<div style="font-size:12px;color:var(--text-light);padding:8px 0;">아직 기록이 없어요.</div>';
+        return '<div style="display:flex;gap:12px;margin:8px 0;font-size:12px;color:var(--text-sub)">' +
+          '<span>오늘: <b style="color:var(--primary)">+' + todayTotal.toLocaleString() + '자</b></span>' +
+          '<span>누적: ' + allTotal.toLocaleString() + '자</span></div>' +
+          '<div class="session-list">' + todayLogs.slice().reverse().map(l =>
+            '<div class="session-item"><span class="session-date">' + fmtDateTime(Date.now()) + '</span>' +
+            '<span style="font-size:12px;font-weight:600;color:var(--primary)">+' + l.amount.toLocaleString() + '자</span>' +
+            '<button class="session-del" onclick="deleteWritingLog(\'' + p.id + '\',\'' + l.id + '\')" title="삭제">✕</button></div>'
+          ).join('') + '</div>';
+      })()}
+    </div>
+
+    <!-- Date Summary -->
+    <div class="ch-detail-section">
+      <div class="ch-detail-title">작업 기록</div>
+      <div class="date-summary">
+        <span>📅 총 ${totalDays}일 작업</span>
+        ${lastSession ? `<span>🕐 최근 ${fmtDateTime(lastSession.date)}</span>` : '<span>아직 기록 없음</span>'}
+      </div>
+
+      <!-- Manual Session Add -->
+      <div class="manual-session-row">
+        <span style="font-size:12px;color:var(--text-sub)">수동 추가:</span>
+        <input type="number" id="manualMin" class="manual-input" placeholder="분" min="1">
+        <select id="manualPhase" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-family:inherit;">
+          <option value="writing">집필</option>
+          <option value="revision">퇴고</option>
+          <option value="plot">플롯</option>
+        </select>
+        <button class="btn btn-sm" onclick="addManualSession('${p.id}','${ch.id}')">추가</button>
+      </div>
+
+      <!-- Session List -->
+      <div class="session-list" style="margin-top:10px;">
+        ${sessions.length === 0 ? '<div style="font-size:12px;color:var(--text-light);padding:8px 0;">세션 기록이 없어요.</div>' :
+          sessions.map(s => `<div class="session-item">
+            <span class="session-date">${fmtDateTime(s.date)}</span>
+            <span class="session-phase status-badge ${s.phase==='writing'?'status-in-progress':s.phase==='revision'?'status-revising':'status-done'}">${phaseText(s.phase)}</span>
+            <span class="session-duration">${fmtTimeShort(s.duration)}</span>
+            <button class="session-del" onclick="deleteSession('${p.id}','${ch.id}','${s.id}')" title="삭제">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Memo -->
+    <div class="ch-detail-section">
+      <div class="ch-detail-title">메모</div>
+      <textarea class="memo-area" onchange="updateChapterMemo('${p.id}','${ch.id}',this.value)" placeholder="이 회차에 대한 메모...">${esc(ch.memo || '')}</textarea>
+    </div>`;
+
+  document.getElementById('view-chapter').innerHTML = html;
+}
+
+// ========== DATA OPERATIONS ==========
+function updatePlotStatus(projId, status) {
+  const p = getProject(projId);
+  if (!p) return;
+  if (!p.plot) p.plot = { status: 'not-started', time: 0 };
+  p.plot.status = status;
+  save();
+  renderProjectDetail();
+}
+
+function addPlotTime(projId) {
+  const el = document.getElementById('plotManualMin');
+  const minutes = parseInt(el.value);
+  if (!minutes || minutes <= 0) { notify('시간을 입력해주세요'); return; }
+  const p = getProject(projId);
+  if (!p) return;
+  if (!p.plot) p.plot = { status: 'not-started', time: 0 };
+  p.plot.time += minutes * 60;
+  logDailyTime(minutes * 60);
+  save();
+  el.value = '';
+  renderProjectDetail();
+  notify(`플롯 ${minutes}분 추가 완료`);
+}
+
+function updateChapterPhase(projId, chId, phase, status) {
+  const p = getProject(projId);
+  if (!p) return;
+  const ch = (p.chapters || []).find(c => c.id === chId);
+  if (!ch) return;
+  if (!ch[phase]) ch[phase] = { status: 'not-started', time: 0 };
+  ch[phase].status = status;
+  save();
+  renderChapterDetail();
+}
+
+function updateWords(projId, chId, field, val) {
+  const p = getProject(projId);
+  if (!p) return;
+  const ch = (p.chapters || []).find(c => c.id === chId);
+  if (!ch) return;
+  if (field === 'current') ch.currentWords = Math.max(0, parseInt(val) || 0);
+  save();
+  renderChapterDetail();
+}
+
+function updateChapterMemo(projId, chId, text) {
+  const p = getProject(projId);
+  if (!p) return;
+  const ch = (p.chapters || []).find(c => c.id === chId);
+  if (!ch) return;
+  ch.memo = text;
+  save();
+}
+
+function addManualSession(projId, chId) {
+  const minEl = document.getElementById('manualMin');
+  const phaseEl = document.getElementById('manualPhase');
+  const minutes = parseInt(minEl.value);
+  if (!minutes || minutes <= 0) { notify('시간을 입력해주세요'); return; }
+
+  const p = getProject(projId);
+  if (!p) return;
+  const ch = (p.chapters || []).find(c => c.id === chId);
+  if (!ch) return;
+
+  const phase = phaseEl.value;
+  const duration = minutes * 60;
+  if (!ch.sessions) ch.sessions = [];
+  ch.sessions.push({ id: genId(), date: Date.now(), duration, phase, type: 'manual' });
+
+  // Add time to phase
+  if (phase === 'plot') {
+    if (!p.plot) p.plot = { status: 'not-started', time: 0 };
+    p.plot.time += duration;
+  } else {
+    if (!ch[phase]) ch[phase] = { status: 'not-started', time: 0 };
+    ch[phase].time += duration;
+  }
+
+  logDailyTime(duration);
+  save();
+  minEl.value = '';
+  renderChapterDetail();
+  notify(`${minutes}분 수동 추가 완료`);
+}
+
+function deleteSession(projId, chId, sessionId) {
+  const p = getProject(projId);
+  if (!p) return;
+  const ch = (p.chapters || []).find(c => c.id === chId);
+  if (!ch) return;
+
+  const session = (ch.sessions || []).find(s => s.id === sessionId);
+  if (!session) return;
+
+  // Remove time from phase
+  const phase = session.phase;
+  if (phase === 'plot') {
+    if (p.plot) p.plot.time = Math.max(0, (p.plot.time || 0) - session.duration);
+  } else {
+    if (ch[phase]) ch[phase].time = Math.max(0, (ch[phase].time || 0) - session.duration);
+  }
+
+  ch.sessions = (ch.sessions || []).filter(s => s.id !== sessionId);
+  save();
+  renderChapterDetail();
+  notify('세션 삭제됨');
+}
+
+function recalcDailyWritingLog() {
+  const key = todayKey();
+  let total = 0;
+  projects.forEach(p => {
+    (p.writingLogs || []).forEach(l => { if (l.date === key) total += l.amount; });
+  });
+  dailyWritingLog[key] = total;
+  saveDailyWritingLog();
+}
+
+function addWritingLog(projId) {
+  const input = document.getElementById('writingLogInput');
+  const amount = parseInt(input.value);
+  if (!amount || amount <= 0) { notify('글자수를 입력해주세요'); return; }
+
+  const p = getProject(projId);
+  if (!p) return;
+  if (!p.writingLogs) p.writingLogs = [];
+  p.writingLogs.push({ id: genId(), date: todayKey(), amount });
+  save();
+  recalcDailyWritingLog();
+  input.value = '';
+  renderChapterDetail();
+  notify(`+${amount.toLocaleString()}자 기록 완료`);
+}
+
+function deleteWritingLog(projId, logId) {
+  const p = getProject(projId);
+  if (!p) return;
+  p.writingLogs = (p.writingLogs || []).filter(l => l.id !== logId);
+  save();
+  recalcDailyWritingLog();
+  renderChapterDetail();
+  notify('글자수 기록 삭제됨');
+}
+
+function toggleArchive(projId) {
+  const p = getProject(projId);
+  if (!p) return;
+  p.archived = !p.archived;
+  save();
+  showView(p.archived ? 'archive' : 'list');
+  notify(p.archived ? '아카이브로 이동' : '프로젝트 복원');
+}
+
+function deleteProject(projId) {
+  if (!confirm('정말 이 프로젝트를 삭제할까요? 되돌릴 수 없어요.')) return;
+  projects = projects.filter(p => p.id !== projId);
+  save();
+  showView('list');
+  notify('프로젝트 삭제됨');
+}
+
+function deleteChapter(projId, chId) {
+  if (!confirm('이 회차를 삭제할까요?')) return;
+  const p = getProject(projId);
+  if (!p) return;
+  p.chapters = (p.chapters || []).filter(c => c.id !== chId);
+  save();
+  showView('detail');
+  notify('회차 삭제됨');
+}
+
+// ========== MODALS ==========
+function closeModal() { document.getElementById('modalContainer').innerHTML = ''; }
+
+function openProjectModal(editId) {
+  const p = editId ? getProject(editId) : null;
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h3>${p ? '프로젝트 수정' : '새 프로젝트'}</h3>
+        <div class="modal-field">
+          <label>작품명 *</label>
+          <input id="modalTitle" value="${p ? esc(p.title) : ''}" placeholder="작품 제목">
+        </div>
+        <div class="modal-field">
+          <label>장르</label>
+          <input id="modalGenre" value="${p ? esc(p.genre || '') : ''}" placeholder="장르 (선택)">
+        </div>
+        <div class="modal-field">
+          <label>메모</label>
+          <textarea id="modalMemo" placeholder="작품 메모 (선택)">${p ? esc(p.memo || '') : ''}</textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal()">취소</button>
+          <button class="btn btn-primary" onclick="saveProject('${editId || ''}')">${p ? '수정' : '생성'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalTitle').focus();
+}
+
+function saveProject(editId) {
+  const title = document.getElementById('modalTitle').value.trim();
+  if (!title) { notify('작품명을 입력해주세요'); return; }
+
+  const genre = document.getElementById('modalGenre').value.trim();
+  const memo = document.getElementById('modalMemo').value.trim();
+
+  if (editId) {
+    const p = getProject(editId);
+    if (p) { p.title = title; p.genre = genre; p.memo = memo; }
+  } else {
+    projects.push({
+      id: genId(), title, genre, memo,
+      plot: { status: 'not-started', time: 0 },
+      chapters: [], createdAt: Date.now(), archived: false
+    });
+  }
+  save();
+  closeModal();
+  if (editId && currentProjectId === editId) renderProjectDetail();
+  else renderProjectList();
+  notify(editId ? '프로젝트 수정 완료' : '프로젝트 생성!');
+}
+
+function openChapterModal(projId, editChId) {
+  const p = getProject(projId);
+  if (!p) return;
+  const ch = editChId ? (p.chapters || []).find(c => c.id === editChId) : null;
+  const nextNum = ch ? ch.number : ((p.chapters || []).length > 0 ? Math.max(...p.chapters.map(c => c.number)) + 1 : 1);
+
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h3>${ch ? '회차 수정' : '새 회차 추가'}</h3>
+        <div class="modal-field">
+          <label>회차 번호</label>
+          <input type="number" id="modalChNum" value="${nextNum}" min="1">
+        </div>
+        <div class="modal-field">
+          <label>제목</label>
+          <input id="modalChTitle" value="${ch ? esc(ch.title || '') : ''}" placeholder="회차 제목 (선택)">
+        </div>
+        <div class="modal-field">
+          <label>목표 글자수</label>
+          <input type="number" id="modalChTarget" value="${ch ? (ch.targetWords || '') : ''}" placeholder="목표 글자수" min="0">
+        </div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal()">취소</button>
+          <button class="btn btn-primary" onclick="saveChapter('${projId}','${editChId || ''}')">${ch ? '수정' : '추가'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalChNum').focus();
+}
+
+function saveChapter(projId, editChId) {
+  const p = getProject(projId);
+  if (!p) return;
+
+  const number = parseInt(document.getElementById('modalChNum').value) || 1;
+  const title = document.getElementById('modalChTitle').value.trim();
+  const targetWords = parseInt(document.getElementById('modalChTarget').value) || 0;
+
+  if (editChId) {
+    const ch = (p.chapters || []).find(c => c.id === editChId);
+    if (ch) { ch.number = number; ch.title = title; ch.targetWords = targetWords; }
+  } else {
+    if (!p.chapters) p.chapters = [];
+    p.chapters.push({
+      id: genId(), number, title, targetWords, currentWords: 0,
+      writing: { status: 'not-started', time: 0 },
+      revision: { status: 'not-started', time: 0 },
+      memo: '', sessions: []
+    });
+    // Sort by number
+    p.chapters.sort((a, b) => a.number - b.number);
+  }
+  save();
+  closeModal();
+  if (editChId && currentChapterId === editChId) renderChapterDetail();
+  else renderProjectDetail();
+  notify(editChId ? '회차 수정 완료' : '회차 추가!');
+}
+
+// ========== POMODORO ==========
+function togglePomodoro() {
+  const widget = document.getElementById('pomoWidget');
+  const toggle = document.getElementById('pomoToggle');
+  widget.classList.toggle('hidden');
+  toggle.classList.toggle('hidden', !widget.classList.contains('hidden'));
+}
+
+function setPomoPhase(phase) {
+  pomo.phase = phase;
+  document.querySelectorAll('.pomo-phase-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function pomoStart() {
+  if (pomo.running) {
+    // Pause
+    clearInterval(pomo.interval);
+    pomo.running = false;
+    pomo.timeLeft = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
+    document.getElementById('pomoStartBtn').textContent = '계속';
+    document.getElementById('pomoStartBtn').classList.remove('active');
+  } else {
+    // Start
+    if (pomo.timeLeft <= 0) {
+      pomo.timeLeft = (pomo.isBreak ? BREAK_MIN : WORK_MIN) * 60;
+    }
+    pomo.endTime = Date.now() + pomo.timeLeft * 1000;
+    pomo.running = true;
+    document.getElementById('pomoStartBtn').textContent = '일시정지';
+    document.getElementById('pomoStartBtn').classList.add('active');
+
+    pomo.interval = setInterval(() => {
+      const remaining = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
+      pomo.timeLeft = remaining;
+      updatePomoDisplay();
+
+      if (remaining <= 0) {
+        clearInterval(pomo.interval);
+        pomo.running = false;
+        playAlarm();
+
+        if (!pomo.isBreak) {
+          // Record session
+          recordPomoSession();
+          pomo.isBreak = true;
+          pomo.timeLeft = BREAK_MIN * 60;
+          document.getElementById('pomoLabel').textContent = '☕ 휴식 시간';
+        } else {
+          pomo.isBreak = false;
+          pomo.timeLeft = WORK_MIN * 60;
+          document.getElementById('pomoLabel').textContent = '🍅 작업 시간';
+        }
+        document.getElementById('pomoStartBtn').textContent = '시작';
+        document.getElementById('pomoStartBtn').classList.remove('active');
+        updatePomoDisplay();
+      }
+    }, 200);
+  }
+}
+
+function pomoReset() {
+  clearInterval(pomo.interval);
+  pomo.running = false;
+  pomo.isBreak = false;
+  pomo.timeLeft = WORK_MIN * 60;
+  document.getElementById('pomoLabel').textContent = '🍅 작업 시간';
+  document.getElementById('pomoStartBtn').textContent = '시작';
+  document.getElementById('pomoStartBtn').classList.remove('active');
+  updatePomoDisplay();
+}
+
+function updatePomoDisplay() {
+  const min = Math.floor(pomo.timeLeft / 60);
+  const sec = pomo.timeLeft % 60;
+  const el = document.getElementById('pomoTime');
+  el.textContent = `${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  el.className = 'pomodoro-time ' + (pomo.isBreak ? 'break-mode' : 'work-mode');
+}
+
+function recordPomoSession() {
+  const duration = WORK_MIN * 60;
+  const phase = pomo.phase;
+
+  // Record to current chapter if in chapter view
+  if (currentProjectId && currentChapterId) {
+    const p = getProject(currentProjectId);
+    if (p) {
+      const ch = (p.chapters || []).find(c => c.id === currentChapterId);
+      if (ch) {
+        if (!ch.sessions) ch.sessions = [];
+        ch.sessions.push({ id: genId(), date: Date.now(), duration, phase, type: 'pomodoro' });
+
+        if (phase === 'plot') {
+          if (!p.plot) p.plot = { status: 'not-started', time: 0 };
+          p.plot.time += duration;
+        } else {
+          if (!ch[phase]) ch[phase] = { status: 'not-started', time: 0 };
+          ch[phase].time += duration;
+        }
+        save();
+        renderChapterDetail();
+      }
+    }
+  } else if (currentProjectId) {
+    // In project detail, record to plot if phase is plot
+    if (phase === 'plot') {
+      const p = getProject(currentProjectId);
+      if (p) {
+        if (!p.plot) p.plot = { status: 'not-started', time: 0 };
+        p.plot.time += duration;
+        save();
+        renderProjectDetail();
+      }
+    }
+  }
+
+  logDailyTime(duration);
+  notify(`🍅 ${WORK_MIN}분 ${phaseText(phase)} 세션 기록!`);
+}
+
+function playAlarm() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.3, 0.6].forEach(delay => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.3);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.3);
+    });
+  } catch(e) {}
+}
+
+// ========== EXPORT / IMPORT ==========
+function exportData() {
+  const data = { projects, dailyLog, version: 1, exportedAt: Date.now() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `novel-tracker-backup-${todayKey()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('백업 파일 저장 완료');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.projects) {
+        if (!confirm(`${data.projects.length}개 프로젝트를 불러올까요? 현재 데이터가 덮어씌워져요.`)) return;
+        projects = data.projects;
+        if (data.dailyLog) dailyLog = data.dailyLog;
+        save();
+        saveDailyLog();
+        showView('list');
+        notify('데이터 불러오기 완료!');
+      }
+    } catch(err) { notify('파일 형식이 올바르지 않아요'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ========== INIT ==========
+init();
+</script>
+
+</body>
+</html>

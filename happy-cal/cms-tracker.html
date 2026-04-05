@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>커미션 트래커</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    --font-mono: "SF Mono", "Fira Code", monospace;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f4f0;
+    --color-background-tertiary: #eae9e5;
+    --color-background-info: #E6F1FB;
+    --color-background-success: #EAF3DE;
+    --color-background-warning: #FAEEDA;
+    --color-background-danger: #FCEBEB;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #6b6b6b;
+    --color-text-tertiary: #999999;
+    --color-text-info: #185FA5;
+    --color-text-success: #3B6D11;
+    --color-text-warning: #854F0B;
+    --color-text-danger: #A32D2D;
+    --color-border-primary: rgba(0,0,0,0.4);
+    --color-border-secondary: rgba(0,0,0,0.3);
+    --color-border-tertiary: rgba(0,0,0,0.15);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1e1e1e;
+      --color-background-secondary: #2a2a2a;
+      --color-background-tertiary: #333333;
+      --color-background-info: #0C447C;
+      --color-background-success: #27500A;
+      --color-background-warning: #412402;
+      --color-background-danger: #501313;
+      --color-text-primary: #e8e8e8;
+      --color-text-secondary: #a0a0a0;
+      --color-text-tertiary: #707070;
+      --color-text-info: #85B7EB;
+      --color-text-success: #97C459;
+      --color-text-warning: #FAC775;
+      --color-text-danger: #F09595;
+      --color-border-primary: rgba(255,255,255,0.4);
+      --color-border-secondary: rgba(255,255,255,0.3);
+      --color-border-tertiary: rgba(255,255,255,0.15);
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    padding: 1rem;
+  }
+  input, select, textarea, button {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    border-radius: var(--border-radius-md);
+  }
+  input[type="text"], input[type="number"], textarea, select {
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    padding: 6px 10px;
+    height: 36px;
+    outline: none;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
+    border-color: #534AB7;
+  }
+  textarea { height: auto; }
+  button {
+    cursor: pointer;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    color: var(--color-text-primary);
+    padding: 6px 14px;
+    border-radius: var(--border-radius-md);
+    transition: background 0.15s;
+  }
+  button:hover { background: var(--color-background-secondary); }
+  button:active { transform: scale(0.98); }
+</style>
+</head>
+<body>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ── Firebase 동기화 ── */
+const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
+const _fbDb=_fbApp.firestore();
+
+function _syncCommToFirebase(commissions, customTypes) {
+  try {
+    const now = new Date();
+    const dateKey = k => { const d = new Date(k); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+    // 날짜별 작업시간 집계
+    const dailyLog = {};
+    const checkDoodle = t => { const ct = (customTypes||[]).find(x => x.name === t); return ct ? ct.category === 'doodle' : t && t.indexOf('낙서:') === 0; };
+    (commissions||[]).forEach(c => {
+      const isDoodle = checkDoodle(c.type);
+      (c.sessions||[]).forEach(s => {
+        const k = dateKey(s.date);
+        if (!dailyLog[k]) dailyLog[k] = { comm: 0, doodle: 0 };
+        if (isDoodle) dailyLog[k].doodle += (s.duration||0);
+        else dailyLog[k].comm += (s.duration||0);
+      });
+    });
+    _fbDb.collection('trackerSync').doc('commission').set({ dailyLog, updatedAt: Date.now() }, { merge: true }).catch(e => console.warn('Firebase sync failed:', e));
+    // 마감일정
+    const deadlines = (commissions||[]).filter(c => c.deadline && c.deadline.length >= 10 && c.status !== 'completed').map(c => ({ id: c.id, name: c.name, deadline: c.deadline, type: 'commission' }));
+    _fbDb.collection('trackerSync').doc('deadlines_commission').set({ items: deadlines, updatedAt: Date.now() }).catch(e => console.warn('Firebase deadline sync failed:', e));
+  } catch(e) { console.warn('Commission Firebase sync error:', e); }
+}
+
+const STORAGE_KEY = "commission-tracker-data";
+const IDB_NAME = "commission-tracker-images";
+const IDB_STORE = "images";
+const TIMER_DEFAULTS = { work: 25, shortBreak: 5, longBreak: 15 };
+
+function openImageDB() {
+  return new Promise(function(resolve, reject) {
+    var req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = function(e) { e.target.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror = function(e) { reject(e); };
+  });
+}
+
+function idbPut(key, value) {
+  return openImageDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function(e) { reject(e); };
+    });
+  });
+}
+
+function idbGet(key) {
+  return openImageDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE, "readonly");
+      var req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function(e) { reject(e); };
+    });
+  });
+}
+
+function idbDelete(key) {
+  return openImageDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function(e) { reject(e); };
+    });
+  });
+}
+
+function idbGetAll() {
+  return openImageDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE, "readonly");
+      var store = tx.objectStore(IDB_STORE);
+      var keys = [], vals = [];
+      var cursorReq = store.openCursor();
+      cursorReq.onsuccess = function(e) {
+        var cursor = e.target.result;
+        if (cursor) { keys.push(cursor.key); vals.push(cursor.value); cursor.continue(); }
+        else {
+          var result = {};
+          keys.forEach(function(k, i) { result[k] = vals[i]; });
+          resolve(result);
+        }
+      };
+      cursorReq.onerror = function(e) { reject(e); };
+    });
+  });
+}
+
+function isDataUrl(s) { return s && typeof s === "string" && s.indexOf("data:") === 0; }
+function imageKey(commId, field, idx) { return commId + ":" + field + (idx !== undefined ? ":" + idx : ""); }
+
+const DEFAULT_CUSTOM_TYPES = [
+  { id: "t1", name: "예시 타입", price: 50000, category: "commission" },
+];
+const DEFAULT_PLATFORMS = [
+  { id: "p1", name: "예시 플랫폼" },
+];
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}시간 ${m}분 ${s < 10 ? "0" : ""}${s}초`;
+  return `${m}분 ${s < 10 ? "0" : ""}${s}초`;
+}
+
+function formatTimerDisplay(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateTime(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function totalSeconds(sessions) {
+  return sessions.reduce((sum, s) => sum + s.duration, 0);
+}
+
+function calcHourlyRate(price, extras, seconds) {
+  if (seconds === 0) return null;
+  const total = price + extras;
+  const hours = seconds / 3600;
+  return Math.round(total / hours);
+}
+
+function CommissionTracker() {
+  const [commissions, setCommissions] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [view, setView] = useState("list");
+  const [selectedId, setSelectedId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [manualTimeInput, setManualTimeInput] = useState({ show: false, hours: 0, minutes: 0 });
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [archiveFilter, setArchiveFilter] = useState({ month: "all", type: "all", platform: "all" });
+  const [showHourlyRate, setShowHourlyRate] = useState(false);
+  const [listFilter, setListFilter] = useState("all");
+  const [listPage, setListPage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
+  const [galleryPage, setGalleryPage] = useState(1);
+  const PAGE_SIZE = 15;
+  const [statsView, setStatsView] = useState("paid");
+  const [showFee, setShowFee] = useState(false);
+  const [customTypes, setCustomTypes] = useState(DEFAULT_CUSTOM_TYPES);
+  const [platforms, setPlatforms] = useState(DEFAULT_PLATFORMS);
+
+  const listFiltered = [...commissions]
+    .filter(c => listFilter === "all" ? true : c.status === listFilter)
+    .sort((a, b) => {
+      if (a.status === "in-progress" && b.status === "completed") return -1;
+      if (a.status === "completed" && b.status === "in-progress") return 1;
+      return 0;
+    });
+  const listTotalPages = Math.ceil(listFiltered.length / PAGE_SIZE);
+  const listSafePage = Math.min(listPage, Math.max(listTotalPages, 1));
+  const listPaged = listFiltered.slice((listSafePage - 1) * PAGE_SIZE, listSafePage * PAGE_SIZE);
+
+  const isStatsExcluded = (typeName) => {
+    const t = customTypes.find(ct => ct.name === typeName);
+    return t ? t.category === "doodle" : typeName.indexOf("낙서:") === 0;
+  };
+  const getTypePrice = (typeName) => {
+    const t = customTypes.find(ct => ct.name === typeName);
+    return t ? t.price : 0;
+  };
+  const typeNames = customTypes.map(ct => ct.name);
+  const [commentText, setCommentText] = useState("");
+  const [commentImage, setCommentImage] = useState(null);
+
+  const [form, setForm] = useState({
+    name: "", type: "", price: 0,
+    hasExtras: false, extrasAmount: 0, imageData: null, notes: "",
+    requestUrl: "", deadline: "", paidDate: "", platform: ""
+  });
+
+  const [timerState, setTimerState] = useState("idle");
+  const [timerMode, setTimerMode] = useState("work");
+  const [timeLeft, setTimeLeft] = useState(TIMER_DEFAULTS.work * 60);
+  const [sessionElapsed, setSessionElapsed] = useState(0);
+  const [pomodoroCount, setPomodoroCount] = useState(0);
+  const [timerSettings, setTimerSettings] = useState(TIMER_DEFAULTS);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const intervalRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const backupInputRef = useRef(null);
+  const prevViewRef = useRef("list");
+  const timerStartRef = useRef(null);
+  const timerAccumulatedRef = useRef(0);
+
+  useEffect(() => {
+    (function loadData() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) { setLoaded(true); return; }
+        var parsed = JSON.parse(raw);
+        var comms = (parsed.commissions || []).map(function(c) {
+          var fixed = Object.assign({}, c);
+          if (fixed.type === "기타낙서") fixed.type = "낙서:낙서";
+          if (!fixed.comments) fixed.comments = [];
+          return fixed;
+        });
+        if (parsed.timerSettings) setTimerSettings(parsed.timerSettings);
+        if (parsed.customTypes && parsed.customTypes.length > 0) setCustomTypes(parsed.customTypes);
+        if (parsed.platforms && parsed.platforms.length > 0) setPlatforms(parsed.platforms);
+
+        var imageKeys = [];
+        comms.forEach(function(c) {
+          if (c.imageData && c.imageData.indexOf("idb:") === 0) imageKeys.push({ commIdx: comms.indexOf(c), field: "imageData", key: c.imageData.slice(4) });
+          (c.comments || []).forEach(function(cm, ci) {
+            if (cm.image && cm.image.indexOf("idb:") === 0) imageKeys.push({ commIdx: comms.indexOf(c), commentIdx: ci, field: "commentImage", key: cm.image.slice(4) });
+          });
+        });
+
+        if (imageKeys.length === 0) { setCommissions(comms); setLoaded(true); return; }
+
+        Promise.all(imageKeys.map(function(ik) { return idbGet(ik.key).then(function(val) { return { ik: ik, val: val }; }); }))
+          .then(function(results) {
+            results.forEach(function(r) {
+              if (r.ik.field === "imageData") comms[r.ik.commIdx].imageData = r.val;
+              else comms[r.ik.commIdx].comments[r.ik.commentIdx].image = r.val;
+            });
+            setCommissions(comms);
+            setLoaded(true);
+          }).catch(function() { setCommissions(comms); setLoaded(true); });
+      } catch (e) { setLoaded(true); }
+    })();
+  }, []);
+
+  const saveData = useCallback((comms, settings) => {
+    try {
+      var imageOps = [];
+      var stripped = comms.map(function(c) {
+        var sc = Object.assign({}, c, { comments: (c.comments || []).slice() });
+        if (isDataUrl(sc.imageData)) {
+          var k = imageKey(c.id, "thumb");
+          imageOps.push(idbPut(k, sc.imageData));
+          sc.imageData = "idb:" + k;
+        }
+        sc.comments = sc.comments.map(function(cm) {
+          if (isDataUrl(cm.image)) {
+            var ck = imageKey(c.id, "cm", cm.id);
+            imageOps.push(idbPut(ck, cm.image));
+            return Object.assign({}, cm, { image: "idb:" + ck });
+          }
+          return cm;
+        });
+        return sc;
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        commissions: stripped, timerSettings: settings || timerSettings,
+        customTypes: customTypes, platforms: platforms
+      }));
+      if (imageOps.length > 0) Promise.all(imageOps).catch(function() {});
+      _syncCommToFirebase(comms, customTypes);
+    } catch (e) {}
+  }, [timerSettings, customTypes, platforms]);
+
+  useEffect(() => {
+    if (loaded) saveData(commissions, timerSettings);
+  }, [commissions, timerSettings, customTypes, platforms, loaded, saveData]);
+
+  useEffect(() => {
+    if (timerState === "running") {
+      if (!timerStartRef.current) timerStartRef.current = Date.now();
+      const totalDuration = timerSettings[timerMode === "shortBreak" ? "shortBreak" : timerMode === "longBreak" ? "longBreak" : "work"] * 60;
+
+      intervalRef.current = setInterval(() => {
+        const elapsed = timerAccumulatedRef.current + Math.floor((Date.now() - timerStartRef.current) / 1000);
+        const remaining = Math.max(0, totalDuration - elapsed);
+
+        if (timerMode === "work") setSessionElapsed(elapsed);
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(intervalRef.current);
+          playAlarm();
+          timerStartRef.current = null;
+          timerAccumulatedRef.current = 0;
+
+          if (timerMode === "work") {
+            if (selectedId) {
+              setCommissions(prev => prev.map(c =>
+                c.id === selectedId ? {
+                  ...c, sessions: [...c.sessions, {
+                    id: generateId(), duration: totalDuration,
+                    date: Date.now(), type: "pomodoro"
+                  }]
+                } : c
+              ));
+            }
+            setSessionElapsed(0);
+            const newCount = pomodoroCount + 1;
+            setPomodoroCount(newCount);
+            const isLongBreak = newCount % 4 === 0;
+            setTimerMode(isLongBreak ? "longBreak" : "shortBreak");
+            setTimerState("idle");
+            setTimeLeft((isLongBreak ? timerSettings.longBreak : timerSettings.shortBreak) * 60);
+          } else {
+            setTimerMode("work");
+            setTimerState("idle");
+            setTimeLeft(timerSettings.work * 60);
+          }
+        }
+      }, 200);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [timerState, timerMode, selectedId, pomodoroCount, timerSettings]);
+
+  function playAlarm() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.6, 1.2].forEach(delay => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 1200;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.5, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.5);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.5);
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.frequency.value = 1800;
+        osc2.type = "sine";
+        gain2.gain.setValueAtTime(0.2, ctx.currentTime + delay);
+        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.3);
+        osc2.start(ctx.currentTime + delay);
+        osc2.stop(ctx.currentTime + delay + 0.3);
+      });
+    } catch (e) {}
+  }
+
+  function startTimer() {
+    if (timerState === "idle") {
+      if (timerMode === "work") setSessionElapsed(0);
+      timerStartRef.current = Date.now();
+      timerAccumulatedRef.current = 0;
+      setTimerState("running");
+    }
+  }
+  function pauseTimer() {
+    if (timerState === "running") {
+      clearInterval(intervalRef.current);
+      timerAccumulatedRef.current += Math.floor((Date.now() - timerStartRef.current) / 1000);
+      timerStartRef.current = null;
+      setTimerState("paused");
+    }
+  }
+  function resumeTimer() {
+    if (timerState === "paused") {
+      timerStartRef.current = Date.now();
+      setTimerState("running");
+    }
+  }
+  function stopTimer() {
+    clearInterval(intervalRef.current);
+    const elapsed = timerAccumulatedRef.current + (timerStartRef.current ? Math.floor((Date.now() - timerStartRef.current) / 1000) : 0);
+    if (timerMode === "work" && elapsed > 0 && selectedId) {
+      setCommissions(prev => prev.map(c =>
+        c.id === selectedId ? {
+          ...c, sessions: [...c.sessions, {
+            id: generateId(), duration: elapsed,
+            date: Date.now(), type: "manual"
+          }]
+        } : c
+      ));
+    }
+    timerStartRef.current = null;
+    timerAccumulatedRef.current = 0;
+    setTimerState("idle");
+    setTimerMode("work");
+    setTimeLeft(timerSettings.work * 60);
+    setSessionElapsed(0);
+  }
+
+  function resetForm() {
+    setForm({ name: "", type: customTypes.length > 0 ? customTypes[0].name : "", price: customTypes.length > 0 ? customTypes[0].price : 0, hasExtras: false, extrasAmount: 0, imageData: null, notes: "", requestUrl: "", deadline: "", paidDate: "", platform: platforms.length > 0 ? platforms[0].name : "" });
+    setEditingId(null);
+  }
+
+  function handleSubmit() {
+    if (!form.name.trim()) return;
+    if (editingId) {
+      setCommissions(prev => prev.map(c => c.id === editingId ? {
+        ...c, name: form.name, type: form.type, price: Number(form.price),
+        hasExtras: form.hasExtras, extrasAmount: form.hasExtras ? Number(form.extrasAmount) : 0,
+        imageData: form.imageData || c.imageData, notes: form.notes,
+        requestUrl: form.requestUrl, deadline: form.deadline, paidDate: form.paidDate,
+        platform: form.platform
+      } : c));
+    } else {
+      const newComm = {
+        id: generateId(), name: form.name, type: form.type,
+        price: Number(form.price), hasExtras: form.hasExtras,
+        extrasAmount: form.hasExtras ? Number(form.extrasAmount) : 0,
+        imageData: form.imageData, notes: form.notes,
+        requestUrl: form.requestUrl, deadline: form.deadline, paidDate: form.paidDate,
+        platform: form.platform,
+        sessions: [], comments: [], status: "in-progress", createdAt: Date.now()
+      };
+      setCommissions(prev => [newComm, ...prev]);
+    }
+    resetForm();
+    setShowForm(false);
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 400;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = (h / w) * maxDim; w = maxDim; }
+          else { w = (w / h) * maxDim; h = maxDim; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        setForm(f => ({ ...f, imageData: canvas.toDataURL("image/jpeg", 0.7) }));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function deleteSession(commId, sessionId) {
+    setCommissions(prev => prev.map(c =>
+      c.id === commId ? { ...c, sessions: c.sessions.filter(s => s.id !== sessionId) } : c
+    ));
+  }
+
+  function addManualTime(commId) {
+    const totalMinutes = (parseInt(manualTimeInput.hours) || 0) * 60 + (parseInt(manualTimeInput.minutes) || 0);
+    if (totalMinutes <= 0) return;
+    setCommissions(prev => prev.map(c =>
+      c.id === commId ? {
+        ...c, sessions: [...c.sessions, {
+          id: generateId(), duration: totalMinutes * 60,
+          date: Date.now(), type: "manual-add"
+        }]
+      } : c
+    ));
+    setManualTimeInput({ show: false, hours: 0, minutes: 0 });
+  }
+
+  function addComment(commId) {
+    if (!commentText.trim() && !commentImage) return;
+    setCommissions(prev => prev.map(c =>
+      c.id === commId ? {
+        ...c, comments: [...(c.comments || []), {
+          id: generateId(), text: commentText.trim(), image: commentImage || null, date: Date.now()
+        }]
+      } : c
+    ));
+    setCommentText("");
+    setCommentImage(null);
+  }
+
+  function handleCommentPaste(e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        e.preventDefault();
+        var file = items[i].getAsFile();
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          var img = new Image();
+          img.onload = function() {
+            var canvas = document.createElement("canvas");
+            var maxDim = 800;
+            var w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = (h / w) * maxDim; w = maxDim; }
+              else { w = (w / h) * maxDim; h = maxDim; }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            setCommentImage(canvas.toDataURL("image/jpeg", 0.7));
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  }
+
+  function exportBackup() {
+    var data = JSON.stringify({ commissions: commissions, timerSettings: timerSettings, customTypes: customTypes, platforms: platforms, exportDate: new Date().toISOString() }, null, 2);
+    var blob = new Blob([data], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "commission_backup_" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importBackup(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var parsed = JSON.parse(ev.target.result);
+        if (parsed.commissions) {
+          setCommissions(parsed.commissions);
+          if (parsed.timerSettings) setTimerSettings(parsed.timerSettings);
+          if (parsed.customTypes && parsed.customTypes.length > 0) setCustomTypes(parsed.customTypes);
+          if (parsed.platforms && parsed.platforms.length > 0) setPlatforms(parsed.platforms);
+        }
+      } catch (err) {}
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  function deleteComment(commId, commentId) {
+    idbDelete(imageKey(commId, "cm", commentId)).catch(function() {});
+    setCommissions(prev => prev.map(c =>
+      c.id === commId ? { ...c, comments: (c.comments || []).filter(cm => cm.id !== commentId) } : c
+    ));
+  }
+
+  function toggleStatus(id) {
+    setCommissions(prev => prev.map(c =>
+      c.id === id ? { ...c, status: c.status === "completed" ? "in-progress" : "completed" } : c
+    ));
+  }
+
+  function deleteCommission(id) {
+    if (confirmDeleteId === id) {
+      var toDelete = commissions.find(function(c) { return c.id === id; });
+      if (toDelete) {
+        idbDelete(imageKey(id, "thumb")).catch(function() {});
+        (toDelete.comments || []).forEach(function(cm) {
+          if (cm.image) idbDelete(imageKey(id, "cm", cm.id)).catch(function() {});
+        });
+      }
+      setCommissions(prev => prev.filter(c => c.id !== id));
+      if (selectedId === id) { setSelectedId(null); setView("list"); }
+      setConfirmDeleteId(null);
+    } else {
+      setConfirmDeleteId(id);
+    }
+  }
+
+  const selected = commissions.find(c => c.id === selectedId);
+  const timerProgress = timerMode === "work"
+    ? 1 - (timeLeft / (timerSettings.work * 60))
+    : timerMode === "shortBreak"
+      ? 1 - (timeLeft / (timerSettings.shortBreak * 60))
+      : 1 - (timeLeft / (timerSettings.longBreak * 60));
+  const circumference = 2 * Math.PI * 90;
+  const dashOffset = circumference * (1 - timerProgress);
+
+  if (!loaded) return (
+    <div style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-secondary)" }}>
+      불러오는 중...
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily: "var(--font-sans)", maxWidth: 800, margin: "0 auto", padding: "1rem 0" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: "var(--color-text-primary)" }}>
+            커미션 트래커
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "4px 0 0" }}>
+            {commissions.length}건 등록 · 진행중 {commissions.filter(c => c.status === "in-progress").length}건
+            {(() => {
+              var now = new Date(); now.setHours(0,0,0,0);
+              var todayStart = now.getTime();
+              var todayEnd = todayStart + 86400000;
+              var todaySec = 0;
+              commissions.forEach(function(c) {
+                (c.sessions || []).forEach(function(s) {
+                  if (s.date >= todayStart && s.date < todayEnd) todaySec += s.duration;
+                });
+              });
+              if (todaySec === 0) return null;
+              return <span style={{ color: "#534AB7", marginLeft: 6 }}>· 오늘 {formatTime(todaySec)}</span>;
+            })()}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {view === "detail" && (
+            <button onClick={() => { setView(prevViewRef.current); setSelectedId(null); }}
+              style={{ fontSize: 13, padding: "6px 14px" }}>
+              ← {prevViewRef.current === "archive" ? "아카이브" : prevViewRef.current === "gallery" ? "갤러리" : "목록"}
+            </button>
+          )}
+          <button onClick={() => { resetForm(); setShowForm(true); }}
+            style={{ fontSize: 13, padding: "6px 14px", background: "#534AB7", color: "#fff", border: "none", borderRadius: "var(--border-radius-md)" }}>
+            + 새 커미션
+          </button>
+          <button onClick={exportBackup}
+            style={{ fontSize: 12, padding: "6px 10px", color: "var(--color-text-secondary)" }} title="백업 내보내기">
+            ↓ 백업
+          </button>
+          <button onClick={() => backupInputRef.current && backupInputRef.current.click()}
+            style={{ fontSize: 12, padding: "6px 10px", color: "var(--color-text-secondary)" }} title="백업 불러오기">
+            ↑ 복원
+          </button>
+          <input ref={backupInputRef} type="file" accept=".json" onChange={importBackup} style={{ display: "none" }} />
+        </div>
+      </div>
+
+      {view !== "detail" && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {view === "list" && commissions.length > 0 && [["all", "전체"], ["in-progress", "진행중"], ["completed", "완료"]].map(([v, label]) => (
+              <button key={v} onClick={() => {setListFilter(v);setListPage(1);}}
+                style={{
+                  fontSize: 12, padding: "4px 12px",
+                  background: listFilter === v ? "#534AB7" : "transparent",
+                  color: listFilter === v ? "#fff" : "var(--color-text-secondary)",
+                  border: listFilter === v ? "0.5px solid #534AB7" : "0.5px solid var(--color-border-tertiary)",
+                  borderRadius: "var(--border-radius-md)"
+                }}>{label}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {[["list", "진행 목록"], ["archive", "아카이브"], ["gallery", "갤러리"], ["settings", "⚙ 설정"]].map(([v, label]) => (
+              <button key={v} onClick={() => setView(v)}
+                style={{
+                  fontSize: 13, padding: "6px 16px",
+                  background: view === v ? "#534AB7" : "transparent",
+                  color: view === v ? "#fff" : "var(--color-text-secondary)",
+                  border: view === v ? "none" : "0.5px solid var(--color-border-tertiary)",
+                  borderRadius: "var(--border-radius-md)"
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div style={{
+          background: "var(--color-background-primary)",
+          border: "0.5px solid var(--color-border-tertiary)",
+          borderRadius: "var(--border-radius-lg)", padding: "1.25rem",
+          marginBottom: "1.5rem"
+        }}>
+          <h2 style={{ fontSize: 16, fontWeight: 500, margin: "0 0 1rem" }}>
+            {editingId ? "커미션 수정" : "새 커미션 등록"}
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>의뢰명 *</label>
+              <input type="text" value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="의뢰자명 / 작업 설명"
+                style={{ width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>커미션 타입</label>
+              <select value={form.type}
+                onChange={e => { const t = e.target.value; setForm(f => ({ ...f, type: t, price: getTypePrice(t) })); }}
+                style={{ width: "100%", boxSizing: "border-box", height: 36 }}>
+                {customTypes.map(ct => <option key={ct.id} value={ct.name}>{ct.name} ({ct.price.toLocaleString()}원)</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>플랫폼</label>
+              <select value={form.platform}
+                onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}
+                style={{ width: "100%", boxSizing: "border-box", height: 36 }}>
+                <option value="">선택 안함</option>
+                {platforms.map(pl => <option key={pl.id} value={pl.name}>{pl.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>기본 가격 (원)</label>
+              <input type="number" value={form.price}
+                onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                style={{ width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>추가금</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, height: 36 }}>
+                <input type="checkbox" checked={form.hasExtras}
+                  onChange={e => setForm(f => ({ ...f, hasExtras: e.target.checked }))}
+                  style={{ width: 18, height: 18 }} />
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>있음</span>
+              </div>
+            </div>
+            {form.hasExtras && (
+              <div>
+                <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>추가금액 (원)</label>
+                <input type="number" value={form.extrasAmount}
+                  onChange={e => setForm(f => ({ ...f, extrasAmount: e.target.value }))}
+                  style={{ width: "100%", boxSizing: "border-box" }} />
+              </div>
+            )}
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>완성 이미지</label>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                style={{ fontSize: 13, padding: "6px 14px" }}>이미지 선택</button>
+              <input ref={fileInputRef} type="file" accept="image/*"
+                onChange={handleImageUpload} style={{ display: "none" }} />
+              {form.imageData && (
+                <img src={form.imageData} alt=""
+                  style={{ width: 48, height: 48, objectFit: "cover", borderRadius: "var(--border-radius-md)" }} />
+              )}
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>메모</label>
+            <textarea value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              rows={2} placeholder="작업 관련 메모..."
+              style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>신청서 링크</label>
+              <input type="url" value={form.requestUrl}
+                onChange={e => setForm(f => ({ ...f, requestUrl: e.target.value }))}
+                placeholder="https://..."
+                style={{ width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>마감일</label>
+              <input type="date" value={form.deadline}
+                onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
+                style={{ width: "100%", boxSizing: "border-box" }} />
+            </div>
+            {!isStatsExcluded(form.type) && <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>납입일</label>
+              <input type="date" value={form.paidDate}
+                onChange={e => setForm(f => ({ ...f, paidDate: e.target.value }))}
+                style={{ width: "100%", boxSizing: "border-box" }} />
+            </div>}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => { setShowForm(false); resetForm(); }}
+              style={{ fontSize: 13, padding: "6px 16px" }}>취소</button>
+            <button onClick={handleSubmit}
+              style={{ fontSize: 13, padding: "6px 16px", background: "#534AB7", color: "#fff", border: "none", borderRadius: "var(--border-radius-md)" }}>
+              {editingId ? "수정" : "등록"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {view === "list" && (
+        <div>
+          {(function() {
+            var withDeadlines = commissions.filter(function(c) { return c.deadline && c.deadline.length >= 10 && c.status !== "completed"; });
+            if (withDeadlines.length === 0) return null;
+
+            function parseDL(s) { var p = s.split("-"); return { y: +p[0], m: +p[1]-1, d: +p[2] }; }
+
+            var today = new Date(); today.setHours(0,0,0,0);
+            var todayY = today.getFullYear(), todayM = today.getMonth(), todayD = today.getDate();
+
+            var sorted = withDeadlines.slice().sort(function(a, b) {
+              var pa = parseDL(a.deadline), pb = parseDL(b.deadline);
+              return new Date(pa.y, pa.m, pa.d) - new Date(pb.y, pb.m, pb.d);
+            });
+
+            var nearest = parseDL(sorted[0].deadline);
+            var calY = nearest.y, calM = nearest.m;
+            if (calY < todayY || (calY === todayY && calM < todayM)) { calY = todayY; calM = todayM; }
+
+            var firstDay = new Date(calY, calM, 1).getDay();
+            var daysInMonth = new Date(calY, calM + 1, 0).getDate();
+            var isCurrentMonth = calY === todayY && calM === todayM;
+
+            var deadlineMap = {};
+            withDeadlines.forEach(function(c) {
+              var p = parseDL(c.deadline);
+              if (p.y === calY && p.m === calM) {
+                if (!deadlineMap[p.d]) deadlineMap[p.d] = [];
+                deadlineMap[p.d].push(c);
+              }
+            });
+
+            var cells = Array(firstDay).fill(null).concat(Array.from({length: daysInMonth}, function(_, i) { return i + 1; }));
+            var deadlineEntries = Object.keys(deadlineMap).sort(function(a,b) { return a-b; });
+
+            return React.createElement("div", {style: {
+              background: "var(--color-background-primary)",
+              border: "0.5px solid var(--color-border-tertiary)",
+              borderRadius: "var(--border-radius-lg)", padding: "12px 16px",
+              marginBottom: "1rem"
+            }},
+              React.createElement("div", {style: {fontSize: 13, fontWeight: 500, marginBottom: 8}}, calY + "년 " + (calM+1) + "월 마감 일정"),
+              React.createElement("div", {style: {display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, textAlign: "center"}},
+                ["일","월","화","수","목","금","토"].map(function(dow) {
+                  return React.createElement("div", {key: dow, style: {fontSize: 11, color: "var(--color-text-tertiary)", padding: "2px 0"}}, dow);
+                }),
+                cells.map(function(day, idx) {
+                  if (day === null) return React.createElement("div", {key: "e"+idx});
+                  var dl = deadlineMap[day];
+                  var isTd = isCurrentMonth && day === todayD;
+                  var isP = isCurrentMonth && day < todayD;
+                  return React.createElement("div", {key: "d"+day, style: {
+                    padding: "6px 0 10px", fontSize: 12, borderRadius: 4, position: "relative",
+                    background: isTd ? "var(--color-background-tertiary)" : "transparent",
+                    color: isP ? "var(--color-text-tertiary)" : "var(--color-text-primary)",
+                    fontWeight: isTd ? 500 : 400,
+                    cursor: dl ? "pointer" : "default"
+                  }, title: dl ? dl.map(function(c) { return c.name; }).join(", ") : "",
+                    onClick: function() { if (dl && dl.length === 1) { prevViewRef.current = "list"; setSelectedId(dl[0].id); setView("detail"); } }
+                  },
+                    day,
+                    dl ? React.createElement("div", {style: {position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 2}},
+                      dl.slice(0, 3).map(function(c, i) {
+                        return React.createElement("div", {key: i, style: {width: 5, height: 5, borderRadius: "50%", background: isP ? "var(--color-text-danger)" : "#534AB7"}});
+                      })
+                    ) : null
+                  );
+                })
+              ),
+              React.createElement("div", {style: {marginTop: 8, display: "flex", flexDirection: "column", gap: 3}},
+                deadlineEntries.map(function(day) {
+                  return deadlineMap[day].map(function(c) {
+                    var p = parseDL(c.deadline);
+                    var dlDate = new Date(p.y, p.m, p.d);
+                    var isP = dlDate < today;
+                    var diff = Math.ceil((dlDate - today) / 86400000);
+                    var tag = isP ? "(D+" + Math.abs(diff) + ")" : diff === 0 ? "(오늘)" : "(D-" + diff + ")";
+                    return React.createElement("div", {key: c.id, style: {fontSize: 12, display: "flex", justifyContent: "space-between", cursor: "pointer"},
+                      onClick: function() { prevViewRef.current = "list"; setSelectedId(c.id); setView("detail"); }
+                    },
+                      React.createElement("span", null, c.name, " ", React.createElement("span", {style: {color: "var(--color-text-tertiary)"}}, "(", c.type, ")")),
+                      React.createElement("span", {style: {color: isP ? "var(--color-text-danger)" : diff <= 3 ? "var(--color-text-danger)" : "var(--color-text-secondary)", fontWeight: 500}},
+                        Number(day) + "일 " + tag)
+                    );
+                  });
+                })
+              )
+            );
+          })()}
+          {commissions.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--color-text-tertiary)", fontSize: 14 }}>
+              아직 등록된 커미션이 없습니다.<br />위의 "새 커미션" 버튼으로 시작해보세요!
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {listPaged.map(c => {
+                const total = totalSeconds(c.sessions);
+                const rate = calcHourlyRate(c.price, c.hasExtras ? c.extrasAmount : 0, total);
+                return (
+                  <div key={c.id}
+                    onClick={() => { prevViewRef.current = "list"; setSelectedId(c.id); setView("detail"); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      background: "var(--color-background-primary)",
+                      border: "0.5px solid var(--color-border-tertiary)",
+                      borderRadius: "var(--border-radius-lg)",
+                      padding: "12px 16px", cursor: "pointer",
+                      transition: "border-color 0.15s"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = "var(--color-border-secondary)"}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = ""}
+                  >
+                    <div style={{
+                      width: 48, height: 48, borderRadius: "var(--border-radius-md)",
+                      background: c.imageData ? "url(" + c.imageData + ") center/cover" : "var(--color-background-secondary)",
+                      flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 18, color: "var(--color-text-tertiary)"
+                    }}>
+                      {!c.imageData && "\uD83D\uDDBC"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                        <span style={{ fontWeight: 500, fontSize: 14, color: "var(--color-text-primary)" }}>{c.name}</span>
+                        <span style={{
+                          fontSize: 11, padding: "2px 8px", borderRadius: "var(--border-radius-md)",
+                          background: c.status === "completed" ? "var(--color-background-success)" : "var(--color-background-info)",
+                          color: c.status === "completed" ? "var(--color-text-success)" : "var(--color-text-info)"
+                        }}>
+                          {c.status === "completed" ? "완료" : "진행중"}
+                        </span>
+                        {!isStatsExcluded(c.type) && !c.paidDate && (
+                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-warning)", color: "var(--color-text-warning)" }}>미입금</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                        {c.type} · {(c.price + (c.hasExtras ? c.extrasAmount : 0)).toLocaleString()}원
+                        {c.platform && <span style={{ marginLeft: 4, fontSize: 11, padding: "1px 6px", borderRadius: 4, background: "var(--color-background-tertiary)", color: "var(--color-text-secondary)" }}>{c.platform}</span>}
+                        {c.hasExtras && <span style={{ color: "var(--color-text-warning)" }}> (추가금 포함)</span>}
+                        {c.deadline && c.status !== "completed" && (() => {
+                          const dl = new Date(c.deadline); dl.setHours(0,0,0,0);
+                          const now = new Date(); now.setHours(0,0,0,0);
+                          const diff = Math.ceil((dl - now) / 86400000);
+                          return <span style={{ color: diff <= 3 ? "var(--color-text-danger)" : "#534AB7", marginLeft: 4 }}>
+                            {diff < 0 ? "D+" + Math.abs(diff) : diff === 0 ? "D-Day" : "D-" + diff}
+                          </span>;
+                        })()}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                        {total > 0 ? formatTime(total) : "\u2014"}
+                      </div>
+                      {showHourlyRate && rate !== null && (
+                        <div style={{ fontSize: 12, color: "#534AB7" }}>시급 {rate.toLocaleString()}원</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {listTotalPages > 1 && (
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,padding:"14px 0",fontSize:13}}>
+                  <button onClick={()=>setListPage(p=>Math.max(1,p-1))} disabled={listSafePage<=1} style={{border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",color:listSafePage<=1?"var(--color-text-tertiary)":"var(--color-text-primary)",padding:"6px 14px",cursor:listSafePage<=1?"default":"pointer",fontSize:13,fontFamily:"inherit"}}>이전</button>
+                  <span style={{color:"var(--color-text-secondary)"}}>{listSafePage} / {listTotalPages}</span>
+                  <button onClick={()=>setListPage(p=>Math.min(listTotalPages,p+1))} disabled={listSafePage>=listTotalPages} style={{border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",color:listSafePage>=listTotalPages?"var(--color-text-tertiary)":"var(--color-text-primary)",padding:"6px 14px",cursor:listSafePage>=listTotalPages?"default":"pointer",fontSize:13,fontFamily:"inherit"}}>다음</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {commissions.length > 0 && (() => {
+            const statsComms = commissions.filter(c => !isStatsExcluded(c.type));
+            const applyFee = (amount) => showFee ? Math.round(amount * 0.9) : amount;
+            const getPrice = (c) => c.price + (c.hasExtras ? c.extrasAmount : 0);
+
+            // 미입금 요약
+            const unpaid = statsComms.filter(c => !c.paidDate);
+            const unpaidTotal = unpaid.reduce((s, c) => s + getPrice(c), 0);
+
+            // 월별 집계 함수
+            const getMonthKey = (c) => {
+              if (statsView === "paid") {
+                return c.paidDate ? c.paidDate.slice(0, 7) : null;
+              }
+              return c.createdAt ? new Date(c.createdAt).toISOString().slice(0, 7) : null;
+            };
+            const monthMap = {};
+            statsComms.forEach(c => {
+              const mk = getMonthKey(c);
+              if (!mk) return;
+              if (!monthMap[mk]) monthMap[mk] = { count: 0, income: 0, time: 0 };
+              monthMap[mk].count++;
+              monthMap[mk].income += getPrice(c);
+              monthMap[mk].time += totalSeconds(c.sessions);
+            });
+            const months = Object.keys(monthMap).sort().reverse();
+
+            // 전체 합산 (뷰에 따라)
+            const visibleComms = statsView === "paid" ? statsComms.filter(c => c.paidDate) : statsComms;
+            const totalIncome = visibleComms.reduce((s, c) => s + getPrice(c), 0);
+            const totalTime = visibleComms.reduce((s, c) => s + totalSeconds(c.sessions), 0);
+
+            return (
+            <React.Fragment>
+            {/* 토글 바 */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: "1.5rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", border: "1px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", overflow: "hidden" }}>
+                {[["created", "작성일 기준"], ["paid", "납입일 기준"]].map(([k, l]) => (
+                  <button key={k} onClick={() => setStatsView(k)} style={{
+                    padding: "5px 12px", fontSize: 12, border: "none", cursor: "pointer", fontFamily: "inherit",
+                    background: statsView === k ? "#534AB7" : "var(--color-background-secondary)",
+                    color: statsView === k ? "#fff" : "var(--color-text-secondary)"
+                  }}>{l}</button>
+                ))}
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer" }}>
+                <input type="checkbox" checked={showFee} onChange={e => setShowFee(e.target.checked)} style={{ cursor: "pointer" }}/>
+                수수료 10% 반영
+              </label>
+            </div>
+
+            {/* 미입금 요약 */}
+            {unpaid.length > 0 && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: "var(--color-background-warning)", borderRadius: "var(--border-radius-md)",
+                padding: "10px 14px", marginTop: 10, fontSize: 13
+              }}>
+                <span style={{ color: "var(--color-text-warning)" }}>💰 미입금 {unpaid.length}건</span>
+                <span style={{ fontWeight: 600, color: "var(--color-text-warning)" }}>{applyFee(unpaidTotal).toLocaleString()}원{showFee ? " (수수료 반영)" : ""}</span>
+              </div>
+            )}
+
+            {/* 전체 통계 카드 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 12 }}>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "1rem" }}>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{statsView === "paid" ? "입금된 수입" : "총 수입"}</div>
+                <div style={{ fontSize: 20, fontWeight: 500 }}>
+                  {applyFee(totalIncome).toLocaleString()}원
+                </div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "1rem" }}>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>총 작업시간</div>
+                <div style={{ fontSize: 20, fontWeight: 500 }}>
+                  {formatTime(totalTime)}
+                </div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "1rem" }}>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>평균 시급</div>
+                <div style={{ fontSize: 20, fontWeight: 500 }}>
+                  {(() => {
+                    if (totalTime === 0) return "\u2014";
+                    return Math.round(applyFee(totalIncome) / (totalTime / 3600)).toLocaleString() + "원";
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* 월별 내역 */}
+            {months.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>월별 내역</div>
+                {months.map(mk => {
+                  const d = monthMap[mk];
+                  return (
+                    <div key={mk} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "8px 0", borderBottom: "1px solid var(--color-border-tertiary)", fontSize: 13
+                    }}>
+                      <span style={{ color: "var(--color-text-secondary)" }}>{mk.replace("-", "년 ")}월</span>
+                      <span>{d.count}건</span>
+                      <span style={{ fontWeight: 500 }}>{applyFee(d.income).toLocaleString()}원</span>
+                      <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>{formatTime(d.time)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 플랫폼별 내역 */}
+            {(() => {
+              const platMap = {};
+              visibleComms.forEach(c => {
+                const pk = c.platform || "미지정";
+                if (!platMap[pk]) platMap[pk] = { count: 0, income: 0 };
+                platMap[pk].count++;
+                platMap[pk].income += getPrice(c);
+              });
+              const platKeys = Object.keys(platMap).sort();
+              if (platKeys.length <= 1) return null;
+              return (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>플랫폼별 내역</div>
+                {platKeys.map(pk => (
+                  <div key={pk} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "8px 0", borderBottom: "1px solid var(--color-border-tertiary)", fontSize: 13
+                  }}>
+                    <span style={{ color: "var(--color-text-secondary)" }}>{pk}</span>
+                    <span>{platMap[pk].count}건</span>
+                    <span style={{ fontWeight: 500 }}>{applyFee(platMap[pk].income).toLocaleString()}원</span>
+                  </div>
+                ))}
+              </div>);
+            })()}
+
+            <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "right", marginTop: 4 }}>
+              * 일러스트 카테고리 제외{showFee ? " · 수수료 10% 반영" : ""}
+            </div>
+            </React.Fragment>
+            );
+          })()}
+        </div>
+      )}
+
+      {view === "archive" && (() => {
+        const getArchiveDate = (c) => {
+          if (!isStatsExcluded(c.type) && c.paidDate) return c.paidDate;
+          const d = new Date(c.createdAt);
+          return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        };
+        const getArchiveMonth = (c) => getArchiveDate(c).slice(0, 7);
+        const months = [...new Set(commissions.map(c => getArchiveMonth(c)))].sort().reverse();
+        const types = [...new Set(commissions.map(c => c.type))];
+        const filtered = commissions.filter(c => {
+          const m = getArchiveMonth(c);
+          if (archiveFilter.month !== "all" && m !== archiveFilter.month) return false;
+          if (archiveFilter.type !== "all" && c.type !== archiveFilter.type) return false;
+          if (archiveFilter.platform !== "all" && (c.platform || "") !== archiveFilter.platform) return false;
+          return true;
+        });
+        const totalRevenue = filtered.filter(c => !isStatsExcluded(c.type)).reduce((s, c) => s + c.price + (c.hasExtras ? c.extrasAmount : 0), 0);
+        const totalTime = filtered.filter(c => !isStatsExcluded(c.type)).reduce((s, c) => s + totalSeconds(c.sessions), 0);
+        const completed = filtered.filter(c => c.status === "completed").length;
+        const typeBreakdown = {};
+        const doodleBreakdown = {};
+        filtered.forEach(c => {
+          var target = isStatsExcluded(c.type) ? doodleBreakdown : typeBreakdown;
+          if (!target[c.type]) target[c.type] = { count: 0, revenue: 0, time: 0 };
+          target[c.type].count++;
+          target[c.type].revenue += c.price + (c.hasExtras ? c.extrasAmount : 0);
+          target[c.type].time += totalSeconds(c.sessions);
+        });
+
+        const archTotalPages = Math.ceil(filtered.length / PAGE_SIZE);
+        const archSafePage = Math.min(archivePage, Math.max(archTotalPages, 1));
+        const archPaged = filtered.slice((archSafePage - 1) * PAGE_SIZE, archSafePage * PAGE_SIZE);
+
+        return (
+          <div>
+            <div style={{ display: "flex", gap: 10, marginBottom: "1rem", flexWrap: "wrap" }}>
+              <div>
+                <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 3 }}>기간 (납입일 기준)</label>
+                <select value={archiveFilter.month}
+                  onChange={e => {setArchiveFilter(f => ({ ...f, month: e.target.value }));setArchivePage(1);}}
+                  style={{ height: 34, fontSize: 13, minWidth: 120 }}>
+                  <option value="all">전체 기간</option>
+                  {months.map(m => <option key={m} value={m}>{m.replace("-", "년 ")}월</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 3 }}>타입</label>
+                <select value={archiveFilter.type}
+                  onChange={e => {setArchiveFilter(f => ({ ...f, type: e.target.value }));setArchivePage(1);}}
+                  style={{ height: 34, fontSize: 13, minWidth: 120 }}>
+                  <option value="all">전체 타입</option>
+                  {types.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 3 }}>플랫폼</label>
+                <select value={archiveFilter.platform}
+                  onChange={e => {setArchiveFilter(f => ({ ...f, platform: e.target.value }));setArchivePage(1);}}
+                  style={{ height: 34, fontSize: 13, minWidth: 120 }}>
+                  <option value="all">전체 플랫폼</option>
+                  {[...new Set(commissions.map(c => c.platform).filter(Boolean))].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: "1.5rem" }}>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px" }}>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>총 건수</div>
+                <div style={{ fontSize: 20, fontWeight: 500 }}>{filtered.length}건</div>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>완료 {completed}건</div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px" }}>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>총 수입</div>
+                <div style={{ fontSize: 20, fontWeight: 500 }}>{totalRevenue.toLocaleString()}원</div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px" }}>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>총 작업시간</div>
+                <div style={{ fontSize: 20, fontWeight: 500 }}>{totalTime > 0 ? formatTime(totalTime) : "\u2014"}</div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px" }}>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>평균 시급</div>
+                <div style={{ fontSize: 20, fontWeight: 500, color: "#534AB7" }}>
+                  {totalTime > 0 ? Math.round(totalRevenue / (totalTime / 3600)).toLocaleString() + "원" : "\u2014"}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "right", marginTop: -8, marginBottom: 12 }}>
+              * 수입·시간·시급 통계에서 일러스트 카테고리 제외 · 납입일 기준 (미입금 시 작성일)
+            </div>
+
+            {Object.keys(typeBreakdown).length > 0 && (
+              <div style={{
+                background: "var(--color-background-primary)",
+                border: "0.5px solid var(--color-border-tertiary)",
+                borderRadius: "var(--border-radius-lg)", padding: "1.25rem",
+                marginBottom: "1rem"
+              }}>
+                <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 12px" }}>타입별 통계</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {Object.entries(typeBreakdown)
+                    .sort((a, b) => b[1].revenue - a[1].revenue)
+                    .map(([type, data]) => {
+                      const rate = data.time > 0 ? Math.round(data.revenue / (data.time / 3600)) : null;
+                      const barWidth = totalRevenue > 0 ? Math.round((data.revenue / totalRevenue) * 100) : 0;
+                      return (
+                        <div key={type} style={{ padding: "8px 10px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 13, fontWeight: 500 }}>{type}</span>
+                              <span style={{ fontSize: 11, padding: "1px 6px", background: "#EEEDFE", color: "#3C3489", borderRadius: "var(--border-radius-md)" }}>{data.count}건</span>
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>{data.revenue.toLocaleString()}원</div>
+                          </div>
+                          <div style={{ height: 4, background: "var(--color-border-tertiary)", borderRadius: 2, overflow: "hidden", marginBottom: 4 }}>
+                            <div style={{ height: "100%", width: barWidth + "%", background: "#534AB7", borderRadius: 2, transition: "width 0.3s" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--color-text-secondary)" }}>
+                            <span>{data.time > 0 ? formatTime(data.time) : "기록 없음"}</span>
+                            {rate && <span>시급 {rate.toLocaleString()}원</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {Object.keys(doodleBreakdown).length > 0 && (
+              <div style={{
+                background: "var(--color-background-primary)",
+                border: "0.5px solid var(--color-border-tertiary)",
+                borderRadius: "var(--border-radius-lg)", padding: "1.25rem",
+                marginBottom: "1rem"
+              }}>
+                <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 4px" }}>일러스트 통계</h3>
+                <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 12 }}>커미션 시급 통계에서 제외</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {Object.entries(doodleBreakdown)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .map(([type, data]) => {
+                      const label = type.replace("낙서:", "");
+                      const totalDoodle = Object.values(doodleBreakdown).reduce((s, d) => s + d.count, 0);
+                      const barWidth = totalDoodle > 0 ? Math.round((data.count / totalDoodle) * 100) : 0;
+                      return (
+                        <div key={type} style={{ padding: "8px 10px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
+                              <span style={{ fontSize: 11, padding: "1px 6px", background: "#EEEDFE", color: "#3C3489", borderRadius: "var(--border-radius-md)" }}>{data.count}건</span>
+                            </div>
+                            <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{data.time > 0 ? formatTime(data.time) : "기록 없음"}</div>
+                          </div>
+                          <div style={{ height: 4, background: "var(--color-border-tertiary)", borderRadius: 2, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: barWidth + "%", background: "#AFA9EC", borderRadius: 2, transition: "width 0.3s" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            <div style={{
+              background: "var(--color-background-primary)",
+              border: "0.5px solid var(--color-border-tertiary)",
+              borderRadius: "var(--border-radius-lg)", padding: "1.25rem"
+            }}>
+              <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 12px" }}>커미션 목록 ({filtered.length}건)</h3>
+              {filtered.length === 0 ? (
+                <div style={{ fontSize: 13, color: "var(--color-text-tertiary)", textAlign: "center", padding: "1rem" }}>
+                  해당 조건의 커미션이 없습니다.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {archPaged.map(c => {
+                    const total = totalSeconds(c.sessions);
+                    const price = c.price + (c.hasExtras ? c.extrasAmount : 0);
+                    return (
+                      <div key={c.id}
+                        onClick={() => { prevViewRef.current = "archive"; setSelectedId(c.id); setView("detail"); }}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "8px 10px", fontSize: 13, cursor: "pointer",
+                          background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "var(--color-background-tertiary)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "var(--color-background-secondary)"}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {c.imageData && <img src={c.imageData} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4 }} />}
+                          <span style={{ fontWeight: 500 }}>{c.name}</span>
+                          <span style={{
+                            fontSize: 11, padding: "1px 6px", borderRadius: "var(--border-radius-md)",
+                            background: c.status === "completed" ? "var(--color-background-success)" : "#EEEDFE",
+                            color: c.status === "completed" ? "var(--color-text-success)" : "#3C3489"
+                          }}>
+                            {c.status === "completed" ? "완료" : "진행중"}
+                          </span>
+                          <span style={{ color: "var(--color-text-tertiary)" }}>{c.type}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span>{price.toLocaleString()}원</span>
+                          <span style={{ color: "var(--color-text-secondary)" }}>{total > 0 ? formatTime(total) : "\u2014"}</span>
+                          <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{formatDate(c.createdAt)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {archTotalPages > 1 && (
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,padding:"14px 0",fontSize:13}}>
+                      <button onClick={()=>setArchivePage(p=>Math.max(1,p-1))} disabled={archSafePage<=1} style={{border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",color:archSafePage<=1?"var(--color-text-tertiary)":"var(--color-text-primary)",padding:"6px 14px",cursor:archSafePage<=1?"default":"pointer",fontSize:13,fontFamily:"inherit"}}>이전</button>
+                      <span style={{color:"var(--color-text-secondary)"}}>{archSafePage} / {archTotalPages}</span>
+                      <button onClick={()=>setArchivePage(p=>Math.min(archTotalPages,p+1))} disabled={archSafePage>=archTotalPages} style={{border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",color:archSafePage>=archTotalPages?"var(--color-text-tertiary)":"var(--color-text-primary)",padding:"6px 14px",cursor:archSafePage>=archTotalPages?"default":"pointer",fontSize:13,fontFamily:"inherit"}}>다음</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {view === "gallery" && (() => {
+        const withImages = commissions.filter(c => c.imageData);
+        const galTotalPages = Math.ceil(withImages.length / PAGE_SIZE);
+        const galSafePage = Math.min(galleryPage, Math.max(galTotalPages, 1));
+        const galPaged = withImages.slice((galSafePage - 1) * PAGE_SIZE, galSafePage * PAGE_SIZE);
+        return (
+          <div>
+            {withImages.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--color-text-tertiary)", fontSize: 14 }}>
+                이미지가 등록된 커미션이 없습니다.
+              </div>
+            ) : (
+              <>
+              <div style={{
+                display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: 12
+              }}>
+                {galPaged.map(c => {
+                  const total = totalSeconds(c.sessions);
+                  const price = c.price + (c.hasExtras ? c.extrasAmount : 0);
+                  return (
+                    <div key={c.id}
+                      onClick={() => { prevViewRef.current = "gallery"; setSelectedId(c.id); setView("detail"); }}
+                      style={{
+                        cursor: "pointer",
+                        borderRadius: "var(--border-radius-lg)",
+                        overflow: "hidden",
+                        border: "0.5px solid var(--color-border-tertiary)",
+                        background: "var(--color-background-primary)",
+                        transition: "border-color 0.15s, transform 0.15s"
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#534AB7"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = ""; e.currentTarget.style.transform = ""; }}
+                    >
+                      <div style={{
+                        width: "100%", paddingTop: "100%", position: "relative",
+                        background: "url(" + c.imageData + ") center/cover"
+                      }}>
+                        <span style={{
+                          position: "absolute", top: 6, right: 6,
+                          fontSize: 10, padding: "2px 6px",
+                          borderRadius: "var(--border-radius-md)",
+                          background: c.status === "completed" ? "var(--color-background-success)" : "#EEEDFE",
+                          color: c.status === "completed" ? "var(--color-text-success)" : "#3C3489"
+                        }}>
+                          {c.status === "completed" ? "완료" : "진행중"}
+                        </span>
+                      </div>
+                      <div style={{ padding: "8px 10px" }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {c.name}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                          {c.type} · {price.toLocaleString()}원
+                        </div>
+                        {total > 0 && (
+                          <div style={{ fontSize: 11, color: "#534AB7", marginTop: 2 }}>
+                            {formatTime(total)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {galTotalPages > 1 && (
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,padding:"14px 0",fontSize:13}}>
+                  <button onClick={()=>setGalleryPage(p=>Math.max(1,p-1))} disabled={galSafePage<=1} style={{border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",color:galSafePage<=1?"var(--color-text-tertiary)":"var(--color-text-primary)",padding:"6px 14px",cursor:galSafePage<=1?"default":"pointer",fontSize:13,fontFamily:"inherit"}}>이전</button>
+                  <span style={{color:"var(--color-text-secondary)"}}>{galSafePage} / {galTotalPages}</span>
+                  <button onClick={()=>setGalleryPage(p=>Math.min(galTotalPages,p+1))} disabled={galSafePage>=galTotalPages} style={{border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",color:galSafePage>=galTotalPages?"var(--color-text-tertiary)":"var(--color-text-primary)",padding:"6px 14px",cursor:galSafePage>=galTotalPages?"default":"pointer",fontSize:13,fontFamily:"inherit"}}>다음</button>
+                </div>
+              )}
+              </>
+            )}
+            <div style={{ marginTop: "1rem", fontSize: 12, color: "var(--color-text-tertiary)", textAlign: "center" }}>
+              이미지 등록 {withImages.length}건 / 전체 {commissions.length}건
+            </div>
+          </div>
+        );
+      })()}
+
+      {view === "settings" && (
+        <div>
+          <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1.25rem", marginBottom: "1rem" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>커미션 타입 관리</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {customTypes.map(ct => (
+                <div key={ct.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", fontSize: 13 }}>
+                  <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 4, background: ct.category === "doodle" ? "var(--color-background-warning)" : "var(--color-background-info)", color: ct.category === "doodle" ? "var(--color-text-warning)" : "var(--color-text-info)" }}>{ct.category === "doodle" ? "일러스트" : "커미션"}</span>
+                  <span style={{ flex: 1, fontWeight: 500 }}>{ct.name}</span>
+                  <span style={{ color: "var(--color-text-secondary)" }}>{ct.price.toLocaleString()}원</span>
+                  <button onClick={() => { const name = prompt("타입 이름:", ct.name); if (!name) return; const price = parseInt(prompt("기본 가격:", ct.price)) || 0; const cat = confirm("일러스트 카테고리인가요?") ? "doodle" : "commission"; setCustomTypes(prev => prev.map(t => t.id === ct.id ? { ...t, name, price, category: cat } : t)); }} style={{ fontSize: 11, padding: "2px 8px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 4, background: "var(--color-background-primary)", cursor: "pointer" }}>수정</button>
+                  <button onClick={() => { if (!confirm(`"${ct.name}" 타입을 삭제할까요?`)) return; setCustomTypes(prev => prev.filter(t => t.id !== ct.id)); }} style={{ fontSize: 11, padding: "2px 8px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 4, background: "var(--color-background-primary)", color: "var(--color-text-danger)", cursor: "pointer" }}>삭제</button>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => { const name = prompt("새 타입 이름:"); if (!name) return; const price = parseInt(prompt("기본 가격:", "0")) || 0; const cat = confirm("일러스트 카테고리인가요?\n(확인 = 일러스트 / 취소 = 커미션)") ? "doodle" : "commission"; setCustomTypes(prev => [...prev, { id: generateId(), name, price, category: cat }]); }} style={{ marginTop: 10, fontSize: 13, padding: "6px 16px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", background: "var(--color-background-primary)", cursor: "pointer" }}>+ 타입 추가</button>
+          </div>
+
+          <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1.25rem", marginBottom: "1rem" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>플랫폼 관리</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {platforms.map(pl => (
+                <div key={pl.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", fontSize: 13 }}>
+                  <span style={{ flex: 1, fontWeight: 500 }}>{pl.name}</span>
+                  <button onClick={() => { const name = prompt("플랫폼 이름:", pl.name); if (!name) return; setPlatforms(prev => prev.map(p => p.id === pl.id ? { ...p, name } : p)); }} style={{ fontSize: 11, padding: "2px 8px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 4, background: "var(--color-background-primary)", cursor: "pointer" }}>수정</button>
+                  <button onClick={() => { if (!confirm(`"${pl.name}" 플랫폼을 삭제할까요?`)) return; setPlatforms(prev => prev.filter(p => p.id !== pl.id)); }} style={{ fontSize: 11, padding: "2px 8px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 4, background: "var(--color-background-primary)", color: "var(--color-text-danger)", cursor: "pointer" }}>삭제</button>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => { const name = prompt("새 플랫폼 이름:"); if (!name) return; setPlatforms(prev => [...prev, { id: generateId(), name }]); }} style={{ marginTop: 10, fontSize: 13, padding: "6px 16px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", background: "var(--color-background-primary)", cursor: "pointer" }}>+ 플랫폼 추가</button>
+          </div>
+
+          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+            * 타입이나 플랫폼을 삭제해도 기존 커미션 데이터는 유지됩니다.
+          </div>
+        </div>
+      )}
+
+      {view === "detail" && selected && (
+        <div>
+          <div style={{
+            background: "var(--color-background-primary)",
+            border: "0.5px solid var(--color-border-tertiary)",
+            borderRadius: "var(--border-radius-lg)", padding: "1.25rem", marginBottom: "1rem"
+          }}>
+            <div style={{ display: "flex", gap: 16 }}>
+              {selected.imageData && (
+                <img src={selected.imageData} alt=""
+                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: "var(--border-radius-md)", flexShrink: 0 }} />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{selected.name}</h2>
+                    <span style={{
+                      fontSize: 11, padding: "2px 8px", borderRadius: "var(--border-radius-md)",
+                      background: selected.status === "completed" ? "var(--color-background-success)" : "var(--color-background-info)",
+                      color: selected.status === "completed" ? "var(--color-text-success)" : "var(--color-text-info)"
+                    }}>
+                      {selected.status === "completed" ? "완료" : "진행중"}
+                    </span>
+                    {!isStatsExcluded(selected.type) && !selected.paidDate && (
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-warning)", color: "var(--color-text-warning)" }}>미입금</span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => toggleStatus(selected.id)} style={{ fontSize: 12, padding: "4px 10px" }}>
+                      {selected.status === "completed" ? "진행중으로" : "완료 처리"}
+                    </button>
+                    <button onClick={() => {
+                      setForm({
+                        name: selected.name, type: selected.type, price: selected.price,
+                        hasExtras: selected.hasExtras, extrasAmount: selected.extrasAmount,
+                        imageData: null, notes: selected.notes || "",
+                        requestUrl: selected.requestUrl || "", deadline: selected.deadline || "",
+                        paidDate: selected.paidDate || "",
+                        platform: selected.platform || ""
+                      });
+                      setEditingId(selected.id);
+                      setShowForm(true);
+                    }} style={{ fontSize: 12, padding: "4px 10px" }}>수정</button>
+                    <button onClick={() => deleteCommission(selected.id)}
+                      onBlur={() => setConfirmDeleteId(null)}
+                      style={{ fontSize: 12, padding: "4px 10px", color: "var(--color-text-danger)" }}>
+                      {confirmDeleteId === selected.id ? "정말 삭제?" : "삭제"}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, fontSize: 13 }}>
+                  <div><span style={{ color: "var(--color-text-secondary)" }}>타입:</span> {selected.type}</div>
+                  <div><span style={{ color: "var(--color-text-secondary)" }}>등록일:</span> {formatDate(selected.createdAt)}</div>
+                  <div><span style={{ color: "var(--color-text-secondary)" }}>플랫폼:</span> {selected.platform || "—"}</div>
+                  <div><span style={{ color: "var(--color-text-secondary)" }}>기본가:</span> {selected.price.toLocaleString()}원</div>
+                  <div><span style={{ color: "var(--color-text-secondary)" }}>추가금:</span> {selected.hasExtras ? selected.extrasAmount.toLocaleString() + "원" : "없음"}</div>
+                  <div style={{ fontWeight: 500 }}>
+                    <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>합계:</span>{" "}
+                    {(selected.price + (selected.hasExtras ? selected.extrasAmount : 0)).toLocaleString()}원
+                  </div>
+                  <div style={{ fontWeight: 500 }}>
+                    <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>총 작업시간:</span>{" "}
+                    {totalSeconds(selected.sessions) > 0 ? formatTime(totalSeconds(selected.sessions)) : "\u2014"}
+                  </div>
+                  {selected.deadline && (
+                    <div>
+                      <span style={{ color: "var(--color-text-secondary)" }}>마감일:</span>{" "}
+                      <span style={{ color: new Date(selected.deadline) < new Date() && selected.status !== "completed" ? "var(--color-text-danger)" : "inherit" }}>
+                        {selected.deadline.replace(/-/g, ".")}
+                      </span>
+                    </div>
+                  )}
+                  {!isStatsExcluded(selected.type) && (
+                    <div>
+                      <span style={{ color: "var(--color-text-secondary)" }}>납입일:</span>{" "}
+                      {selected.paidDate
+                        ? <span>{selected.paidDate.replace(/-/g, ".")}</span>
+                        : <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-warning)", color: "var(--color-text-warning)" }}>미입금</span>}
+                    </div>
+                  )}
+                </div>
+                {selected.requestUrl && (
+                  <div style={{ marginTop: 8 }}>
+                    <a href={selected.requestUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 13, color: "#534AB7", textDecoration: "none" }}>
+                      신청서 열기 ↗
+                    </a>
+                  </div>
+                )}
+                {selected.notes && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: "var(--color-text-secondary)", fontStyle: "italic" }}>{selected.notes}</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            background: "var(--color-background-primary)",
+            border: "0.5px solid var(--color-border-tertiary)",
+            borderRadius: "var(--border-radius-lg)", padding: "1.25rem",
+            marginBottom: "1rem", textAlign: "center"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 8 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>뽀모도로 타이머</h3>
+              <button onClick={() => setShowSettings(!showSettings)} style={{ fontSize: 11, padding: "3px 8px" }}>설정</button>
+            </div>
+
+            {showSettings && (
+              <div style={{
+                display: "flex", gap: 12, justifyContent: "center", marginBottom: 12,
+                padding: "8px 12px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)"
+              }}>
+                {[["work", "작업"], ["shortBreak", "짧은 휴식"], ["longBreak", "긴 휴식"]].map(([key, label]) => (
+                  <div key={key} style={{ fontSize: 12 }}>
+                    <label style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: 2 }}>{label}</label>
+                    <input type="number" value={timerSettings[key]} min={1} max={120}
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 1;
+                        setTimerSettings(s => ({ ...s, [key]: val }));
+                        if (timerState === "idle") {
+                          if (key === "work" && timerMode === "work") setTimeLeft(val * 60);
+                          if (key === "shortBreak" && timerMode === "shortBreak") setTimeLeft(val * 60);
+                          if (key === "longBreak" && timerMode === "longBreak") setTimeLeft(val * 60);
+                        }
+                      }}
+                      style={{ width: 56, textAlign: "center" }} />
+                    <span style={{ color: "var(--color-text-tertiary)", marginLeft: 2 }}>분</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 16 }}>
+              {["work", "shortBreak", "longBreak"].map(mode => (
+                <button key={mode}
+                  onClick={() => { if (timerState !== "idle") return; setTimerMode(mode); setTimeLeft(timerSettings[mode] * 60); }}
+                  style={{
+                    fontSize: 12, padding: "4px 12px",
+                    background: timerMode === mode ? (mode === "work" ? "#534AB7" : "#D4537E") : "transparent",
+                    color: timerMode === mode ? "#fff" : "var(--color-text-secondary)",
+                    border: timerMode === mode ? "none" : "0.5px solid var(--color-border-tertiary)",
+                    borderRadius: "var(--border-radius-md)", cursor: timerState === "idle" ? "pointer" : "default"
+                  }}>
+                  {mode === "work" ? "작업" : mode === "shortBreak" ? "짧은 휴식" : "긴 휴식"}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ position: "relative", width: 200, height: 200, margin: "0 auto 16px" }}>
+              <svg width="200" height="200" viewBox="0 0 200 200">
+                <circle cx="100" cy="100" r="90" fill="none" stroke="var(--color-border-tertiary)" strokeWidth="4" />
+                <circle cx="100" cy="100" r="90" fill="none"
+                  stroke={timerMode === "work" ? "#534AB7" : "#D4537E"}
+                  strokeWidth="4" strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={dashOffset}
+                  transform="rotate(-90 100 100)"
+                  style={{ transition: "stroke-dashoffset 0.5s linear" }} />
+              </svg>
+              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }}>
+                <div style={{ fontSize: 36, fontWeight: 500, fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+                  {formatTimerDisplay(timeLeft)}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                  {timerMode === "work" ? "작업 중" : timerMode === "shortBreak" ? "짧은 휴식" : "긴 휴식"}
+                </div>
+              </div>
+            </div>
+
+            {timerMode === "work" && sessionElapsed > 0 && (
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 8 }}>현재 세션: {formatTime(sessionElapsed)}</div>
+            )}
+            <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 12 }}>완료한 뽀모도로: {pomodoroCount}회</div>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+              {timerState === "idle" && (
+                <button onClick={startTimer}
+                  style={{ fontSize: 14, padding: "8px 24px", background: timerMode === "work" ? "#534AB7" : "#D4537E", color: "#fff", border: "none", borderRadius: "var(--border-radius-md)" }}>
+                  시작
+                </button>
+              )}
+              {timerState === "running" && (
+                <button onClick={pauseTimer} style={{ fontSize: 14, padding: "8px 24px" }}>일시정지</button>
+              )}
+              {timerState === "paused" && (
+                <React.Fragment>
+                  <button onClick={resumeTimer}
+                    style={{ fontSize: 14, padding: "8px 24px", background: "#534AB7", color: "#fff", border: "none", borderRadius: "var(--border-radius-md)" }}>
+                    재개
+                  </button>
+                  <button onClick={stopTimer} style={{ fontSize: 14, padding: "8px 24px", color: "var(--color-text-danger)" }}>중단 (시간 저장)</button>
+                </React.Fragment>
+              )}
+              {timerState === "running" && (
+                <button onClick={stopTimer} style={{ fontSize: 14, padding: "8px 24px", color: "var(--color-text-danger)" }}>중단 (시간 저장)</button>
+              )}
+            </div>
+          </div>
+
+          <div style={{
+            background: "var(--color-background-primary)",
+            border: "0.5px solid var(--color-border-tertiary)",
+            borderRadius: "var(--border-radius-lg)", padding: "1.25rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>작업 기록</h3>
+              <button onClick={() => setManualTimeInput(p => ({ ...p, show: !p.show }))} style={{ fontSize: 12, padding: "4px 10px" }}>
+                {manualTimeInput.show ? "취소" : "+ 수동 입력"}
+              </button>
+            </div>
+
+            {manualTimeInput.show && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                marginBottom: 12, padding: "10px 12px",
+                background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)"
+              }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)", flexShrink: 0 }}>작업시간:</span>
+                <input type="number" min="0" max="99" value={manualTimeInput.hours}
+                  onChange={e => setManualTimeInput(p => ({ ...p, hours: e.target.value }))} style={{ width: 52, textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>시간</span>
+                <input type="number" min="0" max="59" value={manualTimeInput.minutes}
+                  onChange={e => setManualTimeInput(p => ({ ...p, minutes: e.target.value }))} style={{ width: 52, textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>분</span>
+                <button onClick={() => addManualTime(selected.id)}
+                  style={{ fontSize: 12, padding: "4px 12px", marginLeft: 4, background: "#534AB7", color: "#fff", border: "none", borderRadius: "var(--border-radius-md)" }}>
+                  추가
+                </button>
+              </div>
+            )}
+
+            {selected.sessions.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--color-text-tertiary)", textAlign: "center", padding: "1rem" }}>
+                아직 기록된 작업 세션이 없습니다. 타이머를 시작해보세요!
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {selected.sessions.slice().reverse().map(s => (
+                  <div key={s.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "6px 8px", fontSize: 13,
+                    background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        fontSize: 11, padding: "1px 6px", borderRadius: "var(--border-radius-md)",
+                        background: s.type === "pomodoro" ? "#EEEDFE" : "var(--color-background-warning)",
+                        color: s.type === "pomodoro" ? "#3C3489" : "var(--color-text-warning)"
+                      }}>
+                        {s.type === "pomodoro" ? "뽀모도로" : "수동"}
+                      </span>
+                      <span style={{ color: "var(--color-text-secondary)" }}>{formatDate(s.date)}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontWeight: 500 }}>{formatTime(s.duration)}</span>
+                      <button onClick={(e) => { e.stopPropagation(); deleteSession(selected.id, s.id); }}
+                        style={{ fontSize: 11, padding: "2px 6px", color: "var(--color-text-danger)", background: "transparent", border: "none", cursor: "pointer" }}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selected.sessions.length > 0 && (() => {
+              const total = totalSeconds(selected.sessions);
+              const rate = calcHourlyRate(selected.price, selected.hasExtras ? selected.extrasAmount : 0, total);
+              return (
+                <React.Fragment>
+                <div style={{
+                  display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
+                  marginTop: 16, paddingTop: 16, borderTop: "0.5px solid var(--color-border-tertiary)"
+                }}>
+                  <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "10px 12px" }}>
+                    <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>총 세션</div>
+                    <div style={{ fontSize: 18, fontWeight: 500 }}>{selected.sessions.length}회</div>
+                  </div>
+                  <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "10px 12px" }}>
+                    <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>총 작업시간</div>
+                    <div style={{ fontSize: 18, fontWeight: 500 }}>{formatTime(total)}</div>
+                  </div>
+                  <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "10px 12px", cursor: "pointer" }}
+                    onClick={() => setShowHourlyRate(p => !p)}>
+                    <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>환산 시급 {showHourlyRate ? "🔓" : "🔒"}</div>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "#534AB7" }}>
+                      {showHourlyRate ? (rate !== null ? rate.toLocaleString() + "원" : "\u2014") : "클릭하여 보기"}
+                    </div>
+                  </div>
+                </div>
+                {!showHourlyRate && (
+                  <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "right", marginTop: 4 }}>
+                    작업 중에는 시급을 숨겨두는 것을 추천해요
+                  </div>
+                )}
+                </React.Fragment>
+              );
+            })()}
+          </div>
+
+          <div style={{
+            background: "var(--color-background-primary)",
+            border: "0.5px solid var(--color-border-tertiary)",
+            borderRadius: "var(--border-radius-lg)", padding: "1.25rem",
+            marginTop: "1rem"
+          }}>
+            <h3 style={{ fontSize: 16, fontWeight: 500, margin: "0 0 12px" }}>코멘트</h3>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                <input type="text" value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) addComment(selected.id); }}
+                  onPaste={handleCommentPaste}
+                  placeholder="메모 입력 · 이미지 Ctrl+V 붙여넣기 가능"
+                  style={{ flex: 1, boxSizing: "border-box" }} />
+                <button onClick={() => addComment(selected.id)}
+                  style={{ fontSize: 13, padding: "6px 14px", background: "#534AB7", color: "#fff", border: "none", borderRadius: "var(--border-radius-md)", flexShrink: 0 }}>
+                  추가
+                </button>
+              </div>
+              {commentImage && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)" }}>
+                  <img src={commentImage} alt="" style={{ height: 48, borderRadius: 4, objectFit: "cover" }} />
+                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)", flex: 1 }}>WIP 이미지 첨부됨</span>
+                  <button onClick={() => setCommentImage(null)}
+                    style={{ fontSize: 11, padding: "2px 6px", color: "var(--color-text-danger)", background: "transparent", border: "none", cursor: "pointer" }}>
+                    ✕ 제거
+                  </button>
+                </div>
+              )}
+            </div>
+            {(selected.comments || []).length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--color-text-tertiary)", textAlign: "center", padding: "0.5rem" }}>
+                아직 코멘트가 없습니다.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {(selected.comments || []).slice().reverse().map(cm => (
+                  <div key={cm.id} style={{
+                    padding: "8px 10px",
+                    background: "var(--color-background-secondary)",
+                    borderRadius: "var(--border-radius-md)",
+                    fontSize: 13
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        {cm.text && <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.5 }}>{cm.text}</div>}
+                        {cm.image && (
+                          <img src={cm.image} alt="WIP"
+                            onClick={() => window.open(cm.image, "_blank")}
+                            style={{ marginTop: cm.text ? 6 : 0, maxWidth: "100%", maxHeight: 300, borderRadius: 4, cursor: "pointer", display: "block" }} />
+                        )}
+                      </div>
+                      <button onClick={() => deleteComment(selected.id, cm.id)}
+                        style={{ fontSize: 11, padding: "0 4px", color: "var(--color-text-tertiary)", background: "transparent", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8 }}>
+                        ✕
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 4 }}>
+                      {formatDateTime(cm.date)}
+                      {cm.image && <span style={{ marginLeft: 6, color: "#AFA9EC" }}>WIP</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<CommissionTracker />);
+</script>
+</body>
+</html>
