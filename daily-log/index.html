@@ -165,7 +165,7 @@ function WorkStatsTab() {
       // remoteManualLog에 저장
       const docRef = fireDb.collection("remoteManualLog").doc(key);
       const doc = await docRef.get();
-      const prev = doc.exists ? doc.data() : { dev: 0, etc: 0 };
+      const prev = doc.exists ? doc.data() : { dev: 0, dojin: 0, etc: 0 };
       prev[manCat] = (prev[manCat] || 0) + sec;
       await docRef.set(prev);
       // dailyStats에도 반영
@@ -189,6 +189,7 @@ function WorkStatsTab() {
     { key: "doj", label: "동인지", emoji: "📖", color: "#c97ca0" },
     { key: "novel", label: "웹소설", emoji: "✍️", color: "#7cb5a0" },
     { key: "dev", label: "개발", emoji: "💻", color: "#7ca3c4" },
+    { key: "dojin", label: "동인", emoji: "📖", color: "#c97ca0" },
     { key: "etc", label: "기타", emoji: "📌", color: "#b39dcc" },
   ];
 
@@ -214,6 +215,7 @@ function WorkStatsTab() {
     if (key === "doj") return base.doj || 0;
     if (key === "novel") return base.novel || 0;
     if (key === "dev") return (base.dev || 0);
+    if (key === "dojin") return (base.dojin || 0);
     if (key === "etc") return (base.etc || 0);
     return 0;
   };
@@ -246,12 +248,13 @@ function WorkStatsTab() {
   // monthlyStats에 없는 날짜의 원격 수동기록도 포함
   Object.entries(remoteManAll).forEach(([dateKey, rm]) => {
     if (dateKey.startsWith(monthKey + "-") && !(monthData && monthData[dateKey])) {
-      const rmDev = rm.dev || 0, rmEtc = rm.etc || 0;
-      const dayTotal = rmDev + rmEtc;
+      const rmDev = rm.dev || 0, rmDojin = rm.dojin || 0, rmEtc = rm.etc || 0;
+      const dayTotal = rmDev + rmDojin + rmEtc;
       if (dayTotal > 0) {
         workDays++;
         monthGrandTotal += dayTotal;
         monthTotals["dev"] += rmDev;
+        monthTotals["dojin"] += rmDojin;
         monthTotals["etc"] += rmEtc;
       }
     }
@@ -353,6 +356,7 @@ function WorkStatsTab() {
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setManCat("dev")} style={{ ...wsStyles.catToggle, background: manCat === "dev" ? "#7ca3c4" : "rgba(255,255,255,0.06)", color: manCat === "dev" ? "#fff" : "#aaa" }}>💻 개발</button>
+            <button onClick={() => setManCat("dojin")} style={{ ...wsStyles.catToggle, background: manCat === "dojin" ? "#c97ca0" : "rgba(255,255,255,0.06)", color: manCat === "dojin" ? "#fff" : "#aaa" }}>📖 동인</button>
             <button onClick={() => setManCat("etc")} style={{ ...wsStyles.catToggle, background: manCat === "etc" ? "#b39dcc" : "rgba(255,255,255,0.06)", color: manCat === "etc" ? "#fff" : "#aaa" }}>📌 기타</button>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
