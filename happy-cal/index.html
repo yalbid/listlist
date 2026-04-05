@@ -327,9 +327,7 @@ const syncMonthToFirebase=async(yearMonth,cells,rmLog)=>{
   try{
     const data={};
     cells.forEach(c=>{if(c&&c.key){
-      const rm=rmLog&&rmLog[c.key]||{};
-      const rmDev=rm.dev||0,rmEtc=rm.etc||0;
-      data[c.key]={comm:c.comm||0,doodle:c.doodle||0,doj:c.doj||0,novel:c.novel||0,dev:(c.dev||0)-rmDev,etc:(c.etc||0)-rmEtc,total:(c.total||0)-rmDev-rmEtc};
+      data[c.key]={comm:c.comm||0,doodle:c.doodle||0,doj:c.doj||0,novel:c.novel||0,dev:c.dev||0,etc:c.etc||0,total:c.total||0};
     }});
     await fireDb.collection('monthlyStats').doc(yearMonth).set(data,{merge:true});
   }catch(e){console.warn('Firebase month sync failed:',e)}
