@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>캐릭터 행복 일력</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg-primary:#FFF9F0;--bg-secondary:#FFF3E4;--bg-card:#FFFFFF;--bg-input:#FFFBF5;--bg-sidebar:#FFF5EA;--text-primary:#3D2E1F;--text-secondary:#7A6555;--text-muted:#B09A85;--accent:#E8945A;--accent-hover:#D4803F;--accent-light:#FFF0E3;--border:#EDE0D1;--border-light:#F5EDE3;--shadow:rgba(61,46,31,0.08);--shadow-hover:rgba(61,46,31,0.14);--bubble-bg:#FFFFFF;--bubble-border:#EDE0D1;--tag-bg:#FFF0E3;--tag-text:#C47A3A;--danger:#D45B5B;--success:#5BA87A;--overlay:rgba(61,46,31,0.3);--tab-inactive:#D4C4B0;--radius-sm:8px;--radius-md:12px;--radius-lg:20px;--radius-xl:28px;--font-display:'Gowun Batang',serif;--font-body:'Noto Sans KR',sans-serif;--transition:0.25s ease;--sidebar-width:220px;--accent-shadow:rgba(232,148,90,0.3)}
+[data-theme="dark"]{--bg-primary:#121822;--bg-secondary:#182030;--bg-card:#1C2636;--bg-input:#22303E;--bg-sidebar:#10161E;--text-primary:#E2EAF4;--text-secondary:#A0B4C8;--text-muted:#5A7088;--accent:#B48CDE;--accent-hover:#C9A5F0;--accent-light:#1E1A30;--border:#283848;--border-light:#1E2E3E;--shadow:rgba(0,4,16,0.3);--shadow-hover:rgba(0,4,16,0.5);--bubble-bg:#1C2636;--bubble-border:#283848;--tag-bg:#1E1A30;--tag-text:#B48CDE;--danger:#E06060;--success:#6BC090;--overlay:rgba(2,8,18,0.55);--tab-inactive:#4A6078;--accent-shadow:rgba(180,140,222,0.3)}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:var(--font-body);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;transition:background var(--transition),color var(--transition);overflow:hidden}button{cursor:pointer;font-family:var(--font-body)}input,textarea,select{font-family:var(--font-body)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bubbleIn{0%{opacity:0;transform:scale(0.9) translateY(8px)}60%{transform:scale(1.02) translateY(-2px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.app-root{display:flex;height:100vh;width:100%}
+.sidebar{width:var(--sidebar-width);min-width:var(--sidebar-width);background:var(--bg-sidebar);border-right:1px solid var(--border-light);display:flex;flex-direction:column;height:100vh;overflow:hidden;transition:background var(--transition)}
+.sidebar-header{padding:16px 14px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-light)}
+.sidebar-title{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.sidebar-add-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.sidebar-add-btn:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent)}
+.sidebar-bookmarks{flex:1;overflow-y:auto;padding:8px}
+.bookmark-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.bookmark-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 3px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);text-decoration:none;color:var(--text-primary);transition:all var(--transition);position:relative;user-select:none}
+.bookmark-item:hover{border-color:var(--accent);box-shadow:0 2px 10px var(--shadow);transform:translateY(-1px)}
+.bookmark-item.dragging{opacity:0.4;transform:scale(0.95)}
+.bookmark-item.drag-over-item{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-shadow)}
+.bookmark-icon{width:32px;height:32px;border-radius:8px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden}
+.bookmark-icon img{width:100%;height:100%;object-fit:cover}
+.bookmark-label{font-size:10px;color:var(--text-secondary);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.3}
+.bookmark-actions{position:absolute;top:2px;right:2px;display:none}
+.bookmark-item:hover .bookmark-actions{display:flex;gap:2px}
+.bookmark-action-btn{width:18px;height:18px;border-radius:4px;border:none;background:var(--bg-secondary);color:var(--text-muted);font-size:9px;display:flex;align-items:center;justify-content:center}
+.bookmark-action-btn:hover{background:var(--danger);color:white}
+.sidebar-empty{text-align:center;padding:20px 10px;color:var(--text-muted);font-size:12px;line-height:1.6}
+.bm-icon-picker{display:flex;flex-direction:column;gap:8px}
+.bm-icon-type-btns{display:flex;gap:4px}
+.bm-icon-type-btn{flex:1;padding:5px 8px;font-size:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-secondary);cursor:pointer;font-family:inherit;transition:all var(--transition)}
+.bm-icon-type-btn.active{background:var(--accent-light);color:var(--accent);border-color:var(--accent);font-weight:600}
+.bm-icon-preview{width:40px;height:40px;border-radius:8px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;border:1px solid var(--border-light);margin:0 auto}
+.bm-icon-preview img{width:100%;height:100%;object-fit:cover}
+.bm-paste-area{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;font-size:11px;color:var(--text-muted);cursor:pointer;transition:all var(--transition);min-height:50px;display:flex;align-items:center;justify-content:center}
+.bm-paste-area:hover,.bm-paste-area:focus{border-color:var(--accent);color:var(--accent);outline:none}
+.stats-container{max-width:640px;margin:0 auto}
+.stats-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:14px;text-align:center}
+.stat-card-value{font-size:22px;font-weight:700;color:var(--accent);margin-bottom:2px;font-family:var(--font-display)}
+.stat-card-label{font-size:11px;color:var(--text-muted)}
+.stats-section{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:16px;margin-bottom:16px}
+.stats-section-title{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.heatmap-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.heatmap-nav{display:flex;gap:6px;align-items:center}
+.heatmap-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;font-size:12px;color:var(--text-secondary);cursor:pointer;font-family:inherit}
+.heatmap-nav button:hover{border-color:var(--accent);color:var(--accent)}
+.heatmap-month{font-size:14px;font-weight:600;min-width:100px;text-align:center}
+.heatmap-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.heatmap-dow{font-size:10px;color:var(--text-muted);text-align:center;padding:2px 0}
+.heatmap-cell{aspect-ratio:1;border-radius:3px;position:relative;cursor:default;transition:all 0.15s}
+.heatmap-cell.empty{background:transparent}
+.heatmap-cell.lv0{background:var(--border-light)}
+.heatmap-cell.lv1{background:var(--accent-light);opacity:0.7}
+.heatmap-cell.lv2{background:var(--accent);opacity:0.45}
+.heatmap-cell.lv3{background:var(--accent);opacity:0.7}
+.heatmap-cell.lv4{background:var(--accent);opacity:1}
+.heatmap-cell.today-cell{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.heatmap-cell.selected-cell{box-shadow:inset 0 0 0 2px var(--text-primary);transform:scale(1.15);z-index:2}
+.day-detail{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-top:12px;animation:fadeIn .2s ease}
+.day-detail-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.day-detail-date{font-size:14px;font-weight:600}
+.day-detail-total{font-size:13px;color:var(--accent);font-weight:600}
+.day-detail-close{background:none;border:none;color:var(--text-muted);font-size:14px;cursor:pointer;padding:2px 6px;border-radius:4px}
+.day-detail-close:hover{background:var(--border-light);color:var(--text-primary)}
+.day-detail-rows{display:flex;flex-direction:column;gap:4px}
+.day-detail-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0}
+.day-detail-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.day-detail-name{flex:1;color:var(--text-secondary)}
+.day-detail-time{font-weight:600;min-width:50px;text-align:right}
+.day-detail-empty{font-size:12px;color:var(--text-muted);text-align:center;padding:8px 0}
+.heatmap-tooltip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--text-primary);color:var(--bg-primary);font-size:10px;padding:4px 8px;border-radius:4px;white-space:nowrap;z-index:10;pointer-events:none}
+.heatmap-legend{display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:8px;font-size:10px;color:var(--text-muted)}
+.heatmap-legend-cell{width:12px;height:12px;border-radius:2px}
+.heatmap-legend-cell.lv0{background:var(--border-light)}.heatmap-legend-cell.lv1{background:var(--accent-light);opacity:0.7}.heatmap-legend-cell.lv2{background:var(--accent);opacity:0.45}.heatmap-legend-cell.lv3{background:var(--accent);opacity:0.7}.heatmap-legend-cell.lv4{background:var(--accent);opacity:1}
+.tracker-breakdown{display:flex;flex-direction:column;gap:8px}
+.tracker-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-light)}
+.tracker-row:last-child{border-bottom:none}
+.tracker-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.tracker-name{font-size:13px;font-weight:500;flex:1}
+.tracker-time{font-size:13px;font-weight:600;color:var(--accent)}
+.tracker-bar-bg{flex:2;height:6px;background:var(--border-light);border-radius:3px;overflow:hidden}
+.tracker-bar{height:100%;border-radius:3px;transition:width 0.3s}
+.main-area{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;min-width:0}
+.app-header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border-light);background:var(--bg-primary);flex-shrink:0}
+.app-title{font-family:var(--font-display);font-size:20px;font-weight:700;letter-spacing:-.3px}
+.header-actions{display:flex;gap:8px;align-items:center}
+.today-work-badge{display:flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;background:var(--bg-secondary);border:1px solid var(--border-light);font-size:12px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);white-space:nowrap}
+.today-work-badge .tw-time{color:var(--accent);font-weight:600}
+.icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:15px;transition:all var(--transition)}
+.icon-btn:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent)}
+.tab-bar{display:flex;border-bottom:1px solid var(--border-light);background:var(--bg-primary);padding:0 24px;flex-shrink:0}
+.tab-btn{flex:0 0 auto;padding:13px 20px;border:none;background:none;font-size:13px;font-weight:500;color:var(--tab-inactive);position:relative;transition:color var(--transition)}
+.tab-btn.active{color:var(--accent);font-weight:600}
+.tab-btn.active::after{content:'';position:absolute;bottom:-1px;left:20%;right:20%;height:2.5px;background:var(--accent);border-radius:2px}
+.tab-content{flex:1;padding:24px;overflow-y:auto;animation:fadeIn .3s ease}
+.today-container{display:flex;flex-direction:column;align-items:center;gap:24px;padding-top:20px;max-width:560px;margin:0 auto}
+.today-date{font-family:var(--font-display);font-size:15px;color:var(--text-muted);letter-spacing:1px}
+.character-area{display:flex;flex-direction:column;align-items:center;gap:10px}
+.character-img-wrapper{width:110px;height:110px;border-radius:50%;overflow:hidden;border:3px solid var(--accent);box-shadow:0 4px 20px var(--shadow);background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--transition)}
+.character-img-wrapper:hover{transform:scale(1.05);box-shadow:0 6px 28px var(--shadow-hover)}
+.character-img-wrapper:active{transform:scale(.97)}
+.character-img-wrapper img{width:100%;height:100%;object-fit:cover}
+.character-placeholder{font-size:44px;color:var(--text-muted)}
+.character-name{font-size:13px;color:var(--text-secondary);font-weight:500}
+.click-hint{font-size:10px;color:var(--text-muted);margin-top:-4px}
+.speech-bubble-container{width:100%;position:relative;animation:bubbleIn .5s ease}
+.speech-bubble{background:var(--bubble-bg);border:1.5px solid var(--bubble-border);border-radius:var(--radius-lg);padding:24px;position:relative;box-shadow:0 4px 16px var(--shadow);min-height:80px}
+.speech-bubble::before{content:'';position:absolute;top:-10px;left:50%;transform:translateX(-50%);border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:10px solid var(--bubble-border)}
+.speech-bubble::after{content:'';position:absolute;top:-8px;left:50%;transform:translateX(-50%);border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:9px solid var(--bubble-bg)}
+.bubble-text{font-family:var(--font-display);font-size:16px;line-height:1.8;text-align:center;word-break:keep-all}
+.bubble-image{max-width:100%;border-radius:var(--radius-md);margin-top:12px}
+.bubble-source{margin-top:12px;font-size:12px;color:var(--text-muted);text-align:right;font-style:italic}
+.random-btn{padding:12px 28px;background:var(--accent);color:white;border:none;border-radius:var(--radius-xl);font-size:14px;font-weight:600;letter-spacing:.3px;box-shadow:0 4px 16px var(--accent-shadow);transition:all var(--transition);display:flex;align-items:center;gap:8px}
+.random-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.random-btn:active{transform:translateY(0)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.empty-state-icon{font-size:48px;margin-bottom:16px}
+.empty-state-title{font-family:var(--font-display);font-size:18px;margin-bottom:8px;color:var(--text-secondary)}
+.empty-state-desc{font-size:13px;line-height:1.6}
+.manage-container{max-width:640px;margin:0 auto}
+.manage-section{margin-bottom:28px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.section-title{font-family:var(--font-display);font-size:17px;font-weight:700}
+.add-btn{padding:6px 14px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:600;transition:all var(--transition)}
+.add-btn:hover{background:var(--accent-hover)}
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px}
+.form-input,.form-textarea,.form-select{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);font-size:14px;transition:border-color var(--transition);outline:none}
+.form-input:focus,.form-textarea:focus,.form-select:focus{border-color:var(--accent)}
+.form-textarea{min-height:80px;resize:vertical;line-height:1.6}
+.image-drop-area{border:2px dashed var(--border);border-radius:var(--radius-md);padding:24px;text-align:center;color:var(--text-muted);font-size:13px;cursor:pointer;transition:all var(--transition)}
+.image-drop-area:hover,.image-drop-area.drag-over{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+.image-drop-area input[type="file"]{display:none}
+.image-preview-wrapper{position:relative;display:inline-block;margin-top:10px}
+.image-preview{max-width:100%;max-height:160px;border-radius:var(--radius-sm);object-fit:contain}
+.image-remove-btn{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--danger);color:white;border:none;font-size:12px;display:flex;align-items:center;justify-content:center}
+.tags-input-wrapper{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);min-height:40px;cursor:text}
+.tags-input-wrapper:focus-within{border-color:var(--accent)}
+.tag-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:var(--tag-bg);color:var(--tag-text);border-radius:20px;font-size:12px;font-weight:500}
+.tag-chip button{background:none;border:none;color:var(--tag-text);font-size:14px;padding:0;line-height:1;opacity:.7}
+.tag-chip button:hover{opacity:1}
+.tag-input{border:none;outline:none;background:none;font-size:13px;color:var(--text-primary);min-width:80px;flex:1}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.btn-save{padding:8px 20px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;transition:all var(--transition)}
+.btn-save:hover{background:var(--accent-hover)}
+.btn-cancel{padding:8px 20px;background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-weight:500;transition:all var(--transition)}
+.btn-cancel:hover{background:var(--border-light)}
+.item-card{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);margin-bottom:8px;transition:all var(--transition)}
+.item-card:hover{border-color:var(--accent);box-shadow:0 2px 10px var(--shadow)}
+.item-thumb{width:44px;height:44px;border-radius:var(--radius-sm);object-fit:cover;flex-shrink:0;background:var(--bg-secondary)}
+.item-char-thumb{width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;background:var(--bg-secondary);border:2px solid var(--border)}
+.item-info{flex:1;min-width:0}
+.item-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.item-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.item-tag{font-size:10px;padding:1px 7px;background:var(--tag-bg);color:var(--tag-text);border-radius:10px}
+.item-actions{display:flex;gap:4px;flex-shrink:0}
+.item-action-btn{width:30px;height:30px;border-radius:50%;border:none;background:var(--bg-secondary);color:var(--text-muted);font-size:13px;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.item-action-btn:hover{background:var(--border);color:var(--text-primary)}
+.item-action-btn.danger:hover{background:var(--danger);color:white}
+.today-char-badge{font-size:9px;padding:2px 6px;background:var(--accent);color:white;border-radius:10px;font-weight:600}
+.category-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.category-chip{padding:5px 12px;border:1px solid var(--border);border-radius:20px;background:var(--bg-card);color:var(--text-secondary);font-size:12px;display:flex;align-items:center;gap:6px}
+.category-chip .remove-cat{background:none;border:none;color:var(--text-muted);font-size:14px;padding:0;cursor:pointer}
+.category-chip .remove-cat:hover{color:var(--danger)}
+.inline-add{display:flex;gap:6px}
+.inline-add input{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);font-size:13px;outline:none}
+.inline-add input:focus{border-color:var(--accent)}
+.inline-add button{padding:6px 12px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:600}
+.archive-container{max-width:800px;margin:0 auto}
+.archive-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-chip{padding:6px 14px;border:1px solid var(--border);border-radius:20px;background:var(--bg-card);color:var(--text-secondary);font-size:12px;font-weight:500;transition:all var(--transition)}
+.filter-chip:hover{border-color:var(--accent);color:var(--accent)}
+.filter-chip.active{background:var(--accent);color:white;border-color:var(--accent)}
+.archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.archive-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);overflow:hidden;transition:all var(--transition);cursor:pointer}
+.archive-card:hover{border-color:var(--accent);box-shadow:0 4px 16px var(--shadow-hover);transform:translateY(-2px)}
+.archive-card-img{width:100%;height:130px;object-fit:cover;background:var(--bg-secondary)}
+.archive-card-body{padding:12px}
+.archive-card-text{font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.archive-card-source{font-size:10px;color:var(--text-muted);margin-top:6px;font-style:italic}
+.archive-card-tags{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px}
+.modal-overlay{position:fixed;inset:0;background:var(--overlay);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
+.modal-content{background:var(--bg-card);border-radius:var(--radius-lg);padding:24px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px var(--shadow)}
+.modal-title{font-family:var(--font-display);font-size:18px;font-weight:700;margin-bottom:20px}
+.detail-char-area{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px}
+.detail-char-img{width:70px;height:70px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)}
+.detail-bubble{background:var(--bubble-bg);border:1px solid var(--bubble-border);border-radius:var(--radius-lg);padding:20px;text-align:center}
+.detail-image{max-width:100%;border-radius:var(--radius-md);margin-bottom:12px}
+.detail-text{font-family:var(--font-display);font-size:15px;line-height:1.8}
+.detail-float-actions{display:flex;gap:8px;justify-content:center;margin-top:16px}
+.float-action-btn{padding:8px 18px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;border:none;display:flex;align-items:center;gap:5px;transition:all var(--transition)}
+.float-action-btn.edit{background:var(--accent);color:white}
+.float-action-btn.edit:hover{background:var(--accent-hover)}
+.float-action-btn.delete{background:none;color:var(--danger);border:1px solid var(--danger)}
+.float-action-btn.delete:hover{background:var(--danger);color:white}
+.float-action-btn.close-btn{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border)}
+.count-badge{font-size:11px;padding:2px 8px;background:var(--bg-secondary);color:var(--text-muted);border-radius:10px;font-weight:500}
+.loading-screen{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dl-calendar{border-top:1px solid var(--border-light);padding:12px;flex-shrink:0}
+.dl-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.dl-cal-title{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px}
+.dl-cal-month{font-size:11px;color:var(--text-muted);font-weight:500}
+.dl-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center;margin-bottom:6px}
+.dl-cal-dow{font-size:9px;color:var(--text-muted);padding:2px 0}
+.dl-cal-day{font-size:10px;padding:3px 0 5px;border-radius:4px;position:relative;color:var(--text-secondary)}
+.dl-cal-day.today{background:var(--accent-light);color:var(--accent);font-weight:700}
+.dl-cal-day.past{color:var(--text-muted);opacity:.5}
+.dl-cal-day.has-dl{font-weight:600;color:var(--text-primary);cursor:default}
+.dl-cal-dot{position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.dl-cal-dot.overdue{background:var(--danger)}
+.dl-cal-dots{position:absolute;bottom:1px;left:50%;transform:translateX(-50%);display:flex;gap:1px}
+.dl-cal-dots .dot{width:4px;height:4px;border-radius:50%}
+.dot-commission{background:var(--accent)}
+.dot-conti{background:#4285F4}
+.dot-rough{background:#34A853}
+.dot-artwork{background:#E8A000}
+.dot-review{background:#9C27B0}
+.dot-submission{background:#EA4335}
+.dl-list-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-right:4px}
+.dl-list-item{font-size:10px;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;line-height:1.3}
+.dl-list{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.dl-list-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)}
+.dl-list-tag{font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;margin-left:4px;flex-shrink:0}
+.dl-list-tag.soon{background:var(--accent-light);color:var(--accent)}
+.dl-list-tag.overdue{background:rgba(212,91,91,0.15);color:var(--danger)}
+.dl-list-tag.normal{background:var(--bg-secondary);color:var(--text-muted)}
+.dl-empty{font-size:10px;color:var(--text-muted);text-align:center;padding:8px 0}
+/* Status Button (header) */
+.status-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:var(--radius-xl);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition);position:relative}
+.status-btn:hover{box-shadow:0 2px 10px var(--shadow);transform:translateY(-1px)}
+.status-btn:active{transform:translateY(0)}
+.status-btn-dot{width:6px;height:6px;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.popup-mood-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500}
+.popup-mood-chip.work{background:var(--accent-light);color:var(--accent)}
+.popup-mood-chip.rest{background:rgba(91,168,122,.15);color:var(--success)}
+.popup-mood-chip.both{background:var(--bg-secondary);color:var(--text-muted)}
+/* Popup Toast */
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(40px)}}
+.popup-toast{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;align-items:flex-start;gap:10px;padding:14px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 32px var(--shadow-hover);max-width:320px;animation:toastIn .4s ease forwards}
+.popup-toast.hiding{animation:toastOut .4s ease forwards}
+.popup-toast-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--accent)}
+.popup-toast-avatar-placeholder{width:40px;height:40px;border-radius:50%;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:2px solid var(--accent)}
+.popup-toast-body{flex:1;min-width:0}
+.popup-toast-name{font-size:11px;font-weight:600;color:var(--accent);margin-bottom:3px}
+.popup-toast-text{font-family:var(--font-display);font-size:13px;line-height:1.6;color:var(--text-primary);word-break:keep-all}
+.popup-toast-close{position:absolute;top:6px;right:8px;width:18px;height:18px;border:none;background:none;color:var(--text-muted);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.popup-toast-close:hover{background:var(--bg-secondary);color:var(--text-primary)}
+/* Popup Tab */
+.popup-container{max-width:640px;margin:0 auto}
+.popup-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);margin-bottom:20px}
+.popup-toggle-label{font-size:14px;font-weight:500}
+.popup-toggle-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.toggle-switch{position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0}
+.toggle-switch input{display:none}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .25s}
+.toggle-switch input:checked+.toggle-track{background:var(--accent)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:20px;height:20px;background:white;border-radius:50%;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.toggle-switch input:checked~.toggle-knob{transform:translateX(20px)}
+.popup-line-card{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);margin-bottom:8px;transition:all var(--transition)}
+.popup-line-card:hover{border-color:var(--accent);box-shadow:0 2px 10px var(--shadow)}
+.popup-line-text{flex:1;font-size:13px;line-height:1.5;min-width:0;word-break:keep-all}
+.popup-add-area{display:flex;gap:8px;margin-top:12px}
+.popup-add-area textarea{flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);font-size:13px;resize:none;min-height:42px;outline:none;font-family:var(--font-body);line-height:1.5}
+.popup-add-area textarea:focus{border-color:var(--accent)}
+.popup-add-area button{padding:10px 16px;align-self:flex-end}
+.popup-stats{font-size:11px;color:var(--text-muted);margin-bottom:8px;display:flex;gap:12px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useRef,useCallback,useMemo}=React;
+const gid=()=>Date.now().toString(36)+Math.random().toString(36).substr(2,6);
+function sr(seed){let h=0;for(let i=0;i<seed.length;i++)h=Math.imul(31,h)+seed.charCodeAt(i)|0;return()=>{h=Math.imul(h^(h>>>16),0x45d9f3b);h=Math.imul(h^(h>>>13),0x45d9f3b);return((h^(h>>>16))>>>0)/4294967296}}
+const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+const fmtDate=s=>{const d=new Date(s);return`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${'일월화수목금토'[d.getDay()]})`};
+
+/* ── IndexedDB helpers ── */
+const DB_NAME='CharHappyCal';
+const DB_VER=1;
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta');if(!db.objectStoreNames.contains('images'))db.createObjectStore('images')};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const idbGet=async(store,key)=>{const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const rq=tx.objectStore(store).get(key);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)})};
+const idbPut=async(store,key,val)=>{const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');const rq=tx.objectStore(store).put(val,key);rq.onsuccess=()=>res();rq.onerror=()=>rej(rq.error)})};
+const idbDel=async(store,key)=>{const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');const rq=tx.objectStore(store).delete(key);rq.onsuccess=()=>res();rq.onerror=()=>rej(rq.error)})};
+const idbAllKeys=async(store)=>{const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const rq=tx.objectStore(store).getAllKeys();rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)})};
+
+/* ── Firebase 초기화 & 인증 ── */
+const firebaseApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
+const fireDb=firebaseApp.firestore();
+const fireAuth=firebaseApp.auth();
+const googleProvider=new firebase.auth.GoogleAuthProvider();
+
+const syncToFirebase=async(dateKey,data)=>{
+  try{await fireDb.collection('dailyStats').doc(dateKey).set(data,{merge:true});
+  }catch(e){console.warn('Firebase sync failed:',e)}
+};
+
+const readFromFirebase=async(dateKey)=>{
+  try{const doc=await fireDb.collection('dailyStats').doc(dateKey).get();
+    return doc.exists?doc.data():null;
+  }catch(e){console.warn('Firebase read failed:',e);return null}
+};
+
+const syncMonthToFirebase=async(yearMonth,cells,rmLog)=>{
+  try{
+    const data={};
+    cells.forEach(c=>{if(c&&c.key){
+      const rm=rmLog&&rmLog[c.key]||{};
+      const rmDev=rm.dev||0,rmEtc=rm.etc||0;
+      data[c.key]={comm:c.comm||0,doodle:c.doodle||0,doj:c.doj||0,novel:c.novel||0,dev:(c.dev||0)-rmDev,etc:(c.etc||0)-rmEtc,total:(c.total||0)-rmDev-rmEtc};
+    }});
+    await fireDb.collection('monthlyStats').doc(yearMonth).set(data,{merge:true});
+  }catch(e){console.warn('Firebase month sync failed:',e)}
+};
+
+const gFav=u=>{try{const h=new URL(u).hostname;if(!h)return null;return`https://www.google.com/s2/favicons?domain=${h}&sz=64`}catch{return null}};
+const DEF={entries:[],characters:[],categories:[],bookmarks:[],popupLines:[],settings:{todayCharacterId:null,darkMode:false,popupEnabled:true,myStatus:'off'}};
+
+function App(){
+  const[data,setData]=useState(DEF),[iC,setIC]=useState({}),[tab,setTab]=useState('today'),[loaded,setLoaded]=useState(false);
+  useEffect(()=>{document.documentElement.setAttribute('data-theme',data.settings.darkMode?'dark':'light')},[data.settings.darkMode]);
+
+  /* ── load from IndexedDB on mount ── */
+  useEffect(()=>{(async()=>{try{const saved=await idbGet('meta','appData');const d=saved?{...DEF,...saved,bookmarks:saved.bookmarks||[],popupLines:saved.popupLines||[],settings:{...DEF.settings,...(saved.settings||{})}}:DEF;setData(d);const imgKeys=await idbAllKeys('images');const cache={};for(const k of imgKeys){const v=await idbGet('images',k);if(v)cache[k]=v}setIC(cache)}catch(e){console.error('Load error:',e)}setLoaded(true)})()},[]);
+
+  const save=useCallback(async nd=>{setData(nd);try{await idbPut('meta','appData',nd)}catch(e){console.error('Save error:',e)}},[]);
+
+  const sI=async du=>{const fn=`img_${gid()}.${du.startsWith('data:image/png')?'png':'jpg'}`;await idbPut('images',fn,du);setIC(p=>({...p,[fn]:du}));return fn};
+  const rmI=async fn=>{if(!fn)return;await idbDel('images',fn);setIC(p=>{const n={...p};delete n[fn];return n})};
+  const backupRef=useRef(null);
+
+  const doBackup=async()=>{try{const imgKeys=await idbAllKeys('images');const imgs={};for(const k of imgKeys){const v=await idbGet('images',k);if(v)imgs[k]=v}const backup={version:1,exportedAt:new Date().toISOString(),appData:data,images:imgs};const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`행복일력_백업_${today().replace(/-/g,'')}.json`;a.click();URL.revokeObjectURL(url)}catch(e){alert('백업 중 오류가 발생했습니다: '+e.message)}};
+
+  const doRestore=async e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';try{const text=await file.text();const backup=JSON.parse(text);if(!backup.appData){alert('올바른 백업 파일이 아닙니다.');return}if(!confirm(`이 백업을 복원하면 현재 데이터가 모두 대체됩니다.\n백업 시점: ${backup.exportedAt?new Date(backup.exportedAt).toLocaleString('ko-KR'):'알 수 없음'}\n계속하시겠습니까?`))return;const nd={...DEF,...backup.appData,bookmarks:backup.appData.bookmarks||[],popupLines:backup.appData.popupLines||[],settings:{...DEF.settings,...(backup.appData.settings||{})}};await idbPut('meta','appData',nd);if(backup.images){const oldKeys=await idbAllKeys('images');for(const k of oldKeys)await idbDel('images',k);for(const[k,v]of Object.entries(backup.images))await idbPut('images',k,v);setIC(backup.images)}setData(nd);alert('복원이 완료되었습니다!')}catch(e){alert('복원 중 오류가 발생했습니다: '+e.message)}};
+
+  if(!loaded)return(<div className="loading-screen"><div style={{fontSize:56}}>📖</div><div className="loading-spinner"/><p style={{fontSize:13,color:'var(--text-muted)'}}>데이터를 불러오는 중...</p></div>);
+
+  return(<div className="app-root">
+    <Sidebar data={data} save={save}/>
+    <div className="main-area">
+      <header className="app-header"><span className="app-title">📖 캐릭터 행복 일력</span><div className="header-actions"><TodayWorkTime onClick={()=>setTab('stats')}/><StatusBtn data={data} save={save}/><button className="icon-btn" onClick={doBackup} title="백업">💾</button><button className="icon-btn" onClick={()=>backupRef.current?.click()} title="복원">📂</button><input type="file" ref={backupRef} accept=".json" onChange={doRestore} style={{display:'none'}}/><button className="icon-btn" onClick={()=>save({...data,settings:{...data.settings,darkMode:!data.settings.darkMode}})} title="테마 전환">{data.settings.darkMode?'☀️':'🌙'}</button></div></header>
+      <nav className="tab-bar">{[['today','오늘'],['manage','등록/관리'],['archive','아카이브'],['popup','팝업 대사'],['stats','통계']].map(([k,l])=><button key={k} className={`tab-btn ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</button>)}</nav>
+      <div className="tab-content" key={tab}>
+        {tab==='today'&&<TodayTab data={data} iC={iC}/>}
+        {tab==='manage'&&<ManageTab data={data} save={save} iC={iC} sI={sI} rmI={rmI}/>}
+        {tab==='archive'&&<ArchiveTab data={data} save={save} iC={iC} sI={sI} rmI={rmI}/>}
+        {tab==='popup'&&<PopupTab data={data} save={save} iC={iC}/>}
+        {tab==='stats'&&<StatsTab/>}
+      </div>
+    </div>
+    <PopupToast data={data} iC={iC}/>
+  </div>);
+}
+
+function DeadlineCalendar(){
+  const[dls,setDls]=useState([]);
+
+  useEffect(()=>{
+    const loadDoujinshi=()=>new Promise(resolve=>{
+      try{
+        const dbr=indexedDB.open('doujinshi-tracker-db');
+        dbr.onupgradeneeded=()=>{dbr.transaction.abort()};
+        dbr.onerror=()=>resolve([]);
+        dbr.onblocked=()=>resolve([]);
+        dbr.onsuccess=e=>{
+          const db=e.target.result;
+          try{
+            if(!db.objectStoreNames.contains('projects')){db.close();return resolve([])}
+            const tx=db.transaction('projects','readonly');
+            const rq=tx.objectStore('projects').get('data');
+            rq.onsuccess=ev=>{
+              db.close();
+              const rec=ev.target.result;
+              const projects=rec&&rec.value?rec.value:[];
+              if(!Array.isArray(projects))return resolve([]);
+              const items=[];
+              const isDone=p=>{let t=0,d=0;if(p.plot){t++;if(p.plot.done)d++}['conti','rough','artwork'].forEach(ph=>{if(p[ph])p[ph].forEach(pg=>{t++;if(pg.done)d++})});return t>0&&d>=t};
+              projects.filter(p=>!isDone(p)&&p.deadlines).forEach(p=>{
+                [{key:'conti',label:'콘티',type:'conti'},{key:'rough',label:'러프',type:'rough'},{key:'artwork',label:'작화',type:'artwork'},{key:'review',label:'퇴고',type:'review'},{key:'submission',label:'입고',type:'submission'}].forEach(dt=>{
+                  if(p.deadlines[dt.key])items.push({id:`dj-${p.id}-${dt.key}`,name:`${p.title} ${dt.label}`,deadline:p.deadlines[dt.key],type:dt.type})
+                })
+              });
+              resolve(items);
+            };
+            rq.onerror=()=>{db.close();resolve([])};
+          }catch(err){db.close();resolve([])}
+        };
+      }catch(err){resolve([])}
+    });
+
+    const load=()=>{
+      const items=[];
+      // 커미션 트래커
+      try{const raw=localStorage.getItem('commission-tracker-data');if(raw){const d=JSON.parse(raw);(d.commissions||[]).filter(c=>c.deadline&&c.deadline.length>=10&&c.status!=='completed').forEach(c=>{items.push({id:'c-'+c.id,name:c.name,deadline:c.deadline,type:'commission'})})}}catch{}
+      // 동인지 트래커
+      loadDoujinshi().then(djItems=>{
+        setDls([...items,...djItems]);
+      }).catch(()=>{setDls(items)});
+    };
+    load();const iv=setInterval(load,30000);return()=>clearInterval(iv);
+  },[]);
+
+  const now=new Date();now.setHours(0,0,0,0);
+  const ty=now.getFullYear(),tm=now.getMonth(),td=now.getDate();
+
+  if(!dls.length)return <div className="dl-calendar"><div className="dl-cal-header"><span className="dl-cal-title">마감 일정</span></div><div className="dl-empty">진행 중인 마감이 없어요 ✨</div></div>;
+
+  const parseDL=s=>{const p=s.split('-');return{y:+p[0],m:+p[1]-1,d:+p[2]}};
+  const dotCls=t=>({commission:'dot-commission',conti:'dot-conti',rough:'dot-rough',artwork:'dot-artwork',review:'dot-review',submission:'dot-submission'}[t]||'dot-commission');
+  const iconCls=t=>({commission:'var(--accent)',conti:'#4285F4',rough:'#34A853',artwork:'#E8A000',review:'#9C27B0',submission:'#EA4335'}[t]||'var(--accent)');
+
+  // 가장 가까운 마감의 월을 기준으로 달력 표시 (지난 달이면 이번 달)
+  const sorted=[...dls].sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const nr=parseDL(sorted[0].deadline);
+  const calY=(nr.y<ty||(nr.y===ty&&nr.m<tm))?ty:nr.y;
+  const calM=(nr.y<ty||(nr.y===ty&&nr.m<tm))?tm:nr.m;
+
+  const firstDay=new Date(calY,calM,1).getDay();
+  const dim=new Date(calY,calM+1,0).getDate();
+  const isCM=calY===ty&&calM===tm;
+  const dlMap={};dls.forEach(c=>{const p=parseDL(c.deadline);if(p.y===calY&&p.m===calM){if(!dlMap[p.d])dlMap[p.d]=[];dlMap[p.d].push(c)}});
+  const cells=Array(firstDay).fill(null).concat(Array.from({length:dim},(_,i)=>i+1));
+
+  // D-day 기준 가장 가까운 3건
+  const withDiff=dls.map(c=>{const p=parseDL(c.deadline);const dlD=new Date(p.y,p.m,p.d);const diff=Math.ceil((dlD-now)/86400000);return{...c,diff}});
+  const upcoming=withDiff.filter(c=>c.diff>=0).sort((a,b)=>a.diff-b.diff);
+  const overdue=withDiff.filter(c=>c.diff<0).sort((a,b)=>b.diff-a.diff);
+  const top3=[...upcoming,...overdue].slice(0,3);
+
+  return(<div className="dl-calendar">
+    <div className="dl-cal-header"><span className="dl-cal-title">마감 일정</span><span className="dl-cal-month">{calY}.{String(calM+1).padStart(2,'0')}</span></div>
+    <div className="dl-cal-grid">
+      {['일','월','화','수','목','금','토'].map(d=><div key={d} className="dl-cal-dow">{d}</div>)}
+      {cells.map((day,i)=>{if(day===null)return <div key={'e'+i}/>;const dl=dlMap[day];const isT=isCM&&day===td;const isP=isCM&&day<td;return <div key={'d'+day} className={`dl-cal-day${isT?' today':''}${isP?' past':''}${dl?' has-dl':''}`} title={dl?dl.map(c=>c.name).join('\n'):''}>{day}{dl&&<div className="dl-cal-dots">{dl.slice(0,4).map((d,j)=><div key={j} className={`dot ${dotCls(d.type)}`}/>)}</div>}</div>})}
+    </div>
+    <div className="dl-list">{top3.map(c=>{const isP=c.diff<0;const tag=isP?`D+${Math.abs(c.diff)}`:c.diff===0?'오늘':`D-${c.diff}`;const cls=isP?'overdue':c.diff<=3?'soon':'normal';return <div key={c.id} className="dl-list-item"><div className="dl-list-icon" style={{background:iconCls(c.type)}}/><span className="dl-list-name">{c.name}</span><span className={`dl-list-tag ${cls}`}>{tag}</span></div>})}</div>
+  </div>);
+}
+
+function Sidebar({data,save}){
+  const[show,setShow]=useState(false),[edit,setEdit]=useState(null),[name,setName]=useState(''),[url,setUrl]=useState('');
+  const[iconType,setIconType]=useState('favicon'),[icon,setIcon]=useState('');
+  const[dragIdx,setDragIdx]=useState(null),[overIdx,setOverIdx]=useState(null);
+  const pasteRef=useRef(null);
+
+  const open=bm=>{setEdit(bm||null);setName(bm?.name||'');setUrl(bm?.url||'');setIconType(bm?.iconType||'favicon');setIcon(bm?.icon||'');setShow(true)};
+  const doSave=()=>{if(!name.trim()||!url.trim())return;let u=url.trim();if(!u.startsWith('http')&&!u.startsWith('file://'))u='https://'+u;const bm={id:edit?.id||gid(),name:name.trim(),url:u,iconType:iconType,icon:icon};save({...data,bookmarks:edit?data.bookmarks.map(b=>b.id===edit.id?bm:b):[...(data.bookmarks||[]),bm]});setShow(false)};
+
+  const onPaste=e=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const file=item.getAsFile();const reader=new FileReader();reader.onload=ev=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');const sz=64;c.width=sz;c.height=sz;const ctx=c.getContext('2d');const scale=Math.max(sz/img.width,sz/img.height);const w=img.width*scale,h=img.height*scale;ctx.drawImage(img,(sz-w)/2,(sz-h)/2,w,h);setIcon(c.toDataURL('image/png',0.9));setIconType('image')};img.src=ev.target.result};reader.readAsDataURL(file);return}}};
+  const onFileIcon=e=>{const file=e.target.files?.[0];if(!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=ev=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');const sz=64;c.width=sz;c.height=sz;const ctx=c.getContext('2d');const scale=Math.max(sz/img.width,sz/img.height);const w=img.width*scale,h=img.height*scale;ctx.drawImage(img,(sz-w)/2,(sz-h)/2,w,h);setIcon(c.toDataURL('image/png',0.9));setIconType('image')};img.src=ev.target.result};reader.readAsDataURL(file);e.target.value=''};
+
+  const renderIcon=bm=>{
+    if(bm.iconType==='emoji'&&bm.icon)return bm.icon;
+    if(bm.iconType==='image'&&bm.icon)return React.createElement('img',{src:bm.icon,alt:''});
+    if(gFav(bm.url))return React.createElement('img',{src:gFav(bm.url),alt:'',onError:e=>{e.target.style.display='none';e.target.parentNode.innerText='🔗'}});
+    return'🔗';
+  };
+
+  const iconPreview=()=>{
+    if(iconType==='emoji'&&icon)return icon;
+    if(iconType==='image'&&icon)return React.createElement('img',{src:icon,alt:'',style:{width:'100%',height:'100%',objectFit:'cover'}});
+    if(iconType==='favicon'&&url){const f=gFav(url);if(f)return React.createElement('img',{src:f,alt:'',style:{width:'100%',height:'100%',objectFit:'cover'}});}
+    return'🔗';
+  };
+
+  const onDragStart=(e,idx)=>{setDragIdx(idx);e.dataTransfer.effectAllowed='move'};
+  const onDragOver=(e,idx)=>{e.preventDefault();e.dataTransfer.dropEffect='move';setOverIdx(idx)};
+  const onDragEnd=()=>{if(dragIdx!==null&&overIdx!==null&&dragIdx!==overIdx){const bms=[...(data.bookmarks||[])];const[moved]=bms.splice(dragIdx,1);bms.splice(overIdx,0,moved);save({...data,bookmarks:bms})}setDragIdx(null);setOverIdx(null)};
+
+  return(<div className="sidebar">
+    <div className="sidebar-header"><span className="sidebar-title">북마크</span><button className="sidebar-add-btn" onClick={()=>open(null)} title="추가">+</button></div>
+    <div className="sidebar-bookmarks">{(!data.bookmarks?.length)?<div className="sidebar-empty">자주 가는 사이트를<br/>추가해보세요 📌</div>:<div className="bookmark-grid">{data.bookmarks.map((bm,idx)=><a key={bm.id} className={`bookmark-item${dragIdx===idx?' dragging':''}${overIdx===idx&&dragIdx!==idx?' drag-over-item':''}`} href={bm.url} target="_blank" rel="noopener noreferrer" draggable onDragStart={e=>onDragStart(e,idx)} onDragOver={e=>onDragOver(e,idx)} onDragEnd={onDragEnd} onClick={e=>{if(dragIdx!==null){e.preventDefault()}}}>
+      <div className="bookmark-actions"><button className="bookmark-action-btn" onClick={e=>{e.preventDefault();e.stopPropagation();open(bm)}}>✏</button><button className="bookmark-action-btn" onClick={e=>{e.preventDefault();e.stopPropagation();save({...data,bookmarks:data.bookmarks.filter(b=>b.id!==bm.id)})}}>×</button></div>
+      <div className="bookmark-icon">{renderIcon(bm)}</div>
+      <span className="bookmark-label">{bm.name}</span>
+    </a>)}</div>}</div>
+    {show&&<div className="modal-overlay" onClick={()=>setShow(false)}><div className="modal-content" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}><div className="modal-title">{edit?'북마크 수정':'북마크 추가'}</div><div className="form-group"><label className="form-label">이름</label><input className="form-input" value={name} onChange={e=>setName(e.target.value)} placeholder="사이트 이름"/></div><div className="form-group"><label className="form-label">URL</label><input className="form-input" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://example.com 또는 file:///..."/></div>
+    <div className="form-group"><label className="form-label">아이콘</label>
+      <div className="bm-icon-picker">
+        <div className="bm-icon-type-btns">
+          <button className={`bm-icon-type-btn${iconType==='favicon'?' active':''}`} onClick={()=>{setIconType('favicon');setIcon('')}}>🌐 파비콘</button>
+          <button className={`bm-icon-type-btn${iconType==='emoji'?' active':''}`} onClick={()=>setIconType('emoji')}>😊 이모지</button>
+          <button className={`bm-icon-type-btn${iconType==='image'?' active':''}`} onClick={()=>setIconType('image')}>🖼 이미지</button>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div className="bm-icon-preview">{iconPreview()}</div>
+          {iconType==='emoji'&&<input className="form-input" value={icon} onChange={e=>setIcon(e.target.value)} placeholder="이모지 입력" style={{flex:1,fontSize:18,textAlign:'center'}} maxLength={4}/>}
+          {iconType==='image'&&<div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
+            <div className="bm-paste-area" tabIndex={0} onPaste={onPaste} onClick={()=>pasteRef.current?.click()}>Ctrl+V로 붙여넣기 또는 클릭</div>
+            <input type="file" ref={pasteRef} accept="image/*" style={{display:'none'}} onChange={onFileIcon}/>
+            {icon&&<button style={{fontSize:10,color:'var(--danger)',background:'none',border:'none',cursor:'pointer',textAlign:'left'}} onClick={()=>setIcon('')}>아이콘 제거</button>}
+          </div>}
+        </div>
+      </div>
+    </div>
+    <div className="form-actions"><button className="btn-cancel" onClick={()=>setShow(false)}>취소</button><button className="btn-save" onClick={doSave}>{edit?'수정':'추가'}</button></div></div></div>}
+    <DeadlineCalendar/>
+  </div>);
+}
+
+function TodayTab({data,iC}){
+  const[fk,setFk]=useState(0),[rnd,setRnd]=useState(null),[isR,setIsR]=useState(false);
+  const ch=data.characters.find(c=>c.id===data.settings.todayCharacterId)||data.characters[0];
+  const te=useMemo(()=>{if(!data.entries.length)return null;const r=sr(today());return data.entries[Math.floor(r()*data.entries.length)]},[data.entries]);
+  const de=isR?rnd:te;
+  const draw=()=>{if(!data.entries.length)return;setRnd(data.entries[Math.floor(Math.random()*data.entries.length)]);setIsR(true);setFk(k=>k+1)};
+  const back=()=>{setIsR(false);setFk(k=>k+1)};
+  if(!data.entries.length)return<div className="empty-state"><div className="empty-state-icon">📝</div><div className="empty-state-title">아직 등록된 말이 없어요</div><div className="empty-state-desc">"등록/관리" 탭에서 좋은 말을 추가해보세요!</div></div>;
+  return(<div className="today-container">
+    <div className="today-date">{fmtDate(today())}</div>
+    <div className="character-area">
+      <div className="character-img-wrapper" onClick={draw} title="클릭하면 랜덤 뽑기!">{ch?.imageFile&&iC[ch.imageFile]?<img src={iC[ch.imageFile]} alt={ch?.name}/>:<span className="character-placeholder">🧸</span>}</div>
+      {ch&&<span className="character-name">{ch.name}</span>}
+      <span className="click-hint">클릭하면 랜덤 뽑기 🎲</span>
+    </div>
+    <div className="speech-bubble-container" key={fk} style={{animation:'bubbleIn .5s ease'}}><div className="speech-bubble">
+      {de?.imageFile&&iC[de.imageFile]&&<img src={iC[de.imageFile]} alt="" className="bubble-image" style={{marginTop:0,marginBottom:de.text?12:0}}/>}
+      {de?.text&&<div className="bubble-text">{de.text}</div>}
+      {de?.source&&<div className="bubble-source">— {de.source}</div>}
+    </div></div>
+    <div style={{display:'flex',gap:10,alignItems:'center'}}>
+      <button className="random-btn" onClick={draw}>🎲 랜덤 뽑기</button>
+      {isR&&<button className="random-btn" onClick={back} style={{background:'var(--bg-secondary)',color:'var(--text-secondary)',boxShadow:'none',border:'1px solid var(--border)'}}>📅 오늘로</button>}
+    </div>
+    {isR&&<div style={{fontSize:11,color:'var(--text-muted)'}}>🎲 랜덤 뽑기 결과</div>}
+  </div>);
+}
+
+function ManageTab({data,save,iC,sI,rmI}){
+  const[sef,setSef]=useState(false),[scf,setScf]=useState(false),[ee,setEe]=useState(null),[ec,setEc]=useState(null),[nc,setNc]=useState('');
+  const addC=()=>{const n=nc.trim();if(!n||data.categories.some(c=>c.name===n))return;save({...data,categories:[...data.categories,{id:gid(),name:n}]});setNc('')};
+  const delE=async e=>{if(!confirm('정말 삭제할까요?'))return;if(e.imageFile)await rmI(e.imageFile);save({...data,entries:data.entries.filter(x=>x.id!==e.id)})};
+  const delC=async c=>{if(!confirm('정말 삭제할까요?'))return;if(c.imageFile)await rmI(c.imageFile);let nd={...data,characters:data.characters.filter(x=>x.id!==c.id)};if(nd.settings.todayCharacterId===c.id)nd={...nd,settings:{...nd.settings,todayCharacterId:nd.characters[0]?.id||null}};save(nd)};
+  return(<div className="manage-container">
+    <div className="manage-section"><div className="section-header"><span className="section-title">카테고리</span><span className="count-badge">{data.categories.length}개</span></div><div className="category-list">{data.categories.map(c=><span key={c.id} className="category-chip">{c.name}<button className="remove-cat" onClick={()=>save({...data,categories:data.categories.filter(x=>x.id!==c.id)})}>×</button></span>)}{!data.categories.length&&<span style={{fontSize:12,color:'var(--text-muted)'}}>아직 카테고리가 없어요</span>}</div><div className="inline-add"><input value={nc} onChange={e=>setNc(e.target.value)} placeholder="새 카테고리" onKeyDown={e=>e.key==='Enter'&&addC()}/><button onClick={addC}>추가</button></div></div>
+    <div className="manage-section"><div className="section-header"><span className="section-title">캐릭터</span><div style={{display:'flex',gap:8,alignItems:'center'}}><span className="count-badge">{data.characters.length}명</span><button className="add-btn" onClick={()=>{setEc(null);setScf(true)}}>+ 추가</button></div></div>{data.characters.map(c=><div key={c.id} className="item-card">{c.imageFile&&iC[c.imageFile]?<img src={iC[c.imageFile]} alt={c.name} className="item-char-thumb"/>:<div className="item-char-thumb" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🧸</div>}<div className="item-info"><div className="item-title">{c.name}{data.settings.todayCharacterId===c.id&&<span className="today-char-badge" style={{marginLeft:6}}>오늘의 캐릭터</span>}</div></div><div className="item-actions">{data.settings.todayCharacterId!==c.id&&<button className="item-action-btn" onClick={()=>save({...data,settings:{...data.settings,todayCharacterId:c.id}})} title="오늘의 캐릭터">⭐</button>}<button className="item-action-btn" onClick={()=>{setEc(c);setScf(true)}}>✏️</button><button className="item-action-btn danger" onClick={()=>delC(c)}>🗑</button></div></div>)}</div>
+    <div className="manage-section"><div className="section-header"><span className="section-title">등록된 말</span><div style={{display:'flex',gap:8,alignItems:'center'}}><span className="count-badge">{data.entries.length}개</span><button className="add-btn" onClick={()=>{setEe(null);setSef(true)}}>+ 추가</button></div></div>{data.entries.slice().reverse().map(e=><div key={e.id} className="item-card">{e.imageFile&&iC[e.imageFile]?<img src={iC[e.imageFile]} alt="" className="item-thumb"/>:<div className="item-thumb" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'var(--text-muted)'}}>💬</div>}<div className="item-info"><div className="item-title">{e.text||'(이미지)'}</div>{e.source&&<div className="item-sub">— {e.source}</div>}{e.tags?.length>0&&<div className="item-tags">{e.tags.map(t=><span key={t} className="item-tag">{t}</span>)}</div>}</div><div className="item-actions"><button className="item-action-btn" onClick={()=>{setEe(e);setSef(true)}}>✏️</button><button className="item-action-btn danger" onClick={()=>delE(e)}>🗑</button></div></div>)}</div>
+    {sef&&<EF entry={ee} data={data} save={save} sI={sI} rmI={rmI} iC={iC} onClose={()=>setSef(false)}/>}
+    {scf&&<CF char={ec} data={data} save={save} sI={sI} rmI={rmI} iC={iC} onClose={()=>setScf(false)}/>}
+  </div>);
+}
+
+function EF({entry,data,save,sI,rmI,iC,onClose}){
+  const[text,setText]=useState(entry?.text||''),[source,setSource]=useState(entry?.source||''),[catId,setCatId]=useState(entry?.categoryId||''),[tags,setTags]=useState(entry?.tags||[]),[ti,setTi]=useState(''),[idu,setIdu]=useState(null),[exi,setExi]=useState(entry?.imageFile||null);const fr=useRef(null);
+  const hif=f=>{if(!f?.type.startsWith('image/'))return;const r=new FileReader();r.onload=e=>setIdu(e.target.result);r.readAsDataURL(f);setExi(null)};
+  useEffect(()=>{const h=e=>{const i=e.clipboardData?.items;if(!i)return;for(const it of i)if(it.type.startsWith('image/')){e.preventDefault();hif(it.getAsFile());break}};document.addEventListener('paste',h);return()=>document.removeEventListener('paste',h)},[]);
+  const addTag=()=>{const t=ti.trim();if(t&&!tags.includes(t))setTags([...tags,t]);setTi('')};
+  const doSave=async()=>{if(!text.trim()&&!idu&&!exi)return;let imf=exi;if(idu){if(entry?.imageFile)await rmI(entry.imageFile);imf=await sI(idu)}const ne={id:entry?.id||gid(),text:text.trim(),source:source.trim(),categoryId:catId,tags,imageFile:imf,createdAt:entry?.createdAt||new Date().toISOString()};save({...data,entries:entry?data.entries.map(e=>e.id===entry.id?ne:e):[...data.entries,ne]});onClose()};
+  const rmIm=async()=>{if(exi&&entry?.imageFile)await rmI(entry.imageFile);setExi(null);setIdu(null)};
+  const cis=idu||(exi&&iC[exi])||null;
+  return(<div className="modal-overlay" onClick={onClose}><div className="modal-content" onClick={e=>e.stopPropagation()}>
+    <div className="modal-title">{entry?'말 수정':'새 말 등록'}</div>
+    <div className="form-group"><label className="form-label">텍스트</label><textarea className="form-textarea" value={text} onChange={e=>setText(e.target.value)} placeholder="좋은 말을 입력해주세요..."/></div>
+    <div className="form-group"><label className="form-label">이미지 (파일 선택 또는 Ctrl+V)</label>{cis?<div className="image-preview-wrapper"><img src={cis} alt="" className="image-preview"/><button className="image-remove-btn" onClick={rmIm}>×</button></div>:<div className="image-drop-area" onClick={()=>fr.current?.click()} onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}} onDragLeave={e=>e.currentTarget.classList.remove('drag-over')} onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');hif(e.dataTransfer.files[0])}}>📷 클릭 / 드래그 / Ctrl+V<input type="file" ref={fr} accept="image/*" onChange={e=>hif(e.target.files[0])}/></div>}</div>
+    <div className="form-group"><label className="form-label">출처 메모</label><input className="form-input" value={source} onChange={e=>setSource(e.target.value)} placeholder="출처 (선택)"/></div>
+    <div className="form-group"><label className="form-label">카테고리</label><select className="form-select" value={catId} onChange={e=>setCatId(e.target.value)}><option value="">선택 안함</option>{data.categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+    <div className="form-group"><label className="form-label">태그</label><div className="tags-input-wrapper">{tags.map(t=><span key={t} className="tag-chip">{t}<button onClick={()=>setTags(tags.filter(x=>x!==t))}>×</button></span>)}<input className="tag-input" value={ti} onChange={e=>setTi(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag()}}} placeholder={!tags.length?"태그 입력 후 Enter":""}/></div></div>
+    <div className="form-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={doSave}>{entry?'수정 저장':'등록'}</button></div>
+  </div></div>);
+}
+
+function CF({char,data,save,sI,rmI,iC,onClose}){
+  const[name,setName]=useState(char?.name||''),[idu,setIdu]=useState(null),[exi,setExi]=useState(char?.imageFile||null);const fr=useRef(null);
+  const hif=f=>{if(!f?.type.startsWith('image/'))return;const r=new FileReader();r.onload=e=>setIdu(e.target.result);r.readAsDataURL(f);setExi(null)};
+  useEffect(()=>{const h=e=>{const i=e.clipboardData?.items;if(!i)return;for(const it of i)if(it.type.startsWith('image/')){e.preventDefault();hif(it.getAsFile());break}};document.addEventListener('paste',h);return()=>document.removeEventListener('paste',h)},[]);
+  const doSave=async()=>{if(!name.trim())return;let imf=exi;if(idu){if(char?.imageFile)await rmI(char.imageFile);imf=await sI(idu)}const nc={id:char?.id||gid(),name:name.trim(),imageFile:imf};const cs=char?data.characters.map(c=>c.id===char.id?nc:c):[...data.characters,nc];let s=data.settings;if(!s.todayCharacterId&&cs.length===1)s={...s,todayCharacterId:nc.id};save({...data,characters:cs,settings:s});onClose()};
+  const rmIm=async()=>{if(exi&&char?.imageFile)await rmI(char.imageFile);setExi(null);setIdu(null)};
+  const cis=idu||(exi&&iC[exi])||null;
+  return(<div className="modal-overlay" onClick={onClose}><div className="modal-content" onClick={e=>e.stopPropagation()}>
+    <div className="modal-title">{char?'캐릭터 수정':'새 캐릭터 등록'}</div>
+    <div className="form-group"><label className="form-label">캐릭터 이름</label><input className="form-input" value={name} onChange={e=>setName(e.target.value)} placeholder="캐릭터 이름"/></div>
+    <div className="form-group"><label className="form-label">캐릭터 이미지 (Ctrl+V 가능)</label>{cis?<div style={{textAlign:'center'}}><div className="image-preview-wrapper"><img src={cis} alt="" className="image-preview" style={{borderRadius:'50%',width:100,height:100,objectFit:'cover'}}/><button className="image-remove-btn" onClick={rmIm}>×</button></div></div>:<div className="image-drop-area" onClick={()=>fr.current?.click()} onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}} onDragLeave={e=>e.currentTarget.classList.remove('drag-over')} onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');hif(e.dataTransfer.files[0])}}>📷 클릭 / 드래그 / Ctrl+V<input type="file" ref={fr} accept="image/*" onChange={e=>hif(e.target.files[0])}/></div>}</div>
+    <div className="form-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={doSave}>{char?'수정 저장':'등록'}</button></div>
+  </div></div>);
+}
+
+function ArchiveTab({data,save,iC,sI,rmI}){
+  const[fc,setFc]=useState(''),[ft,setFt]=useState(''),[de,setDe]=useState(null),[sef,setSef]=useState(false);
+  const allT=useMemo(()=>{const s=new Set();data.entries.forEach(e=>(e.tags||[]).forEach(t=>s.add(t)));return[...s].sort()},[data.entries]);
+  const fl=useMemo(()=>data.entries.filter(e=>{if(fc&&e.categoryId!==fc)return false;if(ft&&!(e.tags||[]).includes(ft))return false;return true}),[data.entries,fc,ft]);
+  const ch=data.characters.find(c=>c.id===data.settings.todayCharacterId)||data.characters[0];
+  const hDel=async e=>{if(!confirm('정말 삭제할까요?'))return;if(e.imageFile)await rmI(e.imageFile);save({...data,entries:data.entries.filter(x=>x.id!==e.id)});setDe(null)};
+  const hEdit=e=>{setDe(null);setSef(e)};
+  if(!data.entries.length)return<div className="empty-state"><div className="empty-state-icon">📚</div><div className="empty-state-title">아카이브가 비어있어요</div><div className="empty-state-desc">"등록/관리" 탭에서 추가하면 여기에 표시됩니다.</div></div>;
+  return(<div className="archive-container">
+    <div className="archive-filters"><button className={`filter-chip ${!fc&&!ft?'active':''}`} onClick={()=>{setFc('');setFt('')}}>전체</button>{data.categories.map(c=><button key={c.id} className={`filter-chip ${fc===c.id?'active':''}`} onClick={()=>{setFc(fc===c.id?'':c.id);setFt('')}}>{c.name}</button>)}{allT.map(t=><button key={t} className={`filter-chip ${ft===t?'active':''}`} onClick={()=>{setFt(ft===t?'':t);setFc('')}}>#{t}</button>)}</div>
+    <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:12}}>{fl.length}개의 말</div>
+    <div className="archive-grid">{fl.map(e=><div key={e.id} className="archive-card" onClick={()=>setDe(e)}>{e.imageFile&&iC[e.imageFile]&&<img src={iC[e.imageFile]} alt="" className="archive-card-img"/>}<div className="archive-card-body">{e.text?<div className="archive-card-text">{e.text}</div>:<div className="archive-card-text" style={{color:'var(--text-muted)'}}>(이미지)</div>}{e.source&&<div className="archive-card-source">— {e.source}</div>}{e.tags?.length>0&&<div className="archive-card-tags">{e.tags.map(t=><span key={t} className="item-tag">{t}</span>)}</div>}</div></div>)}</div>
+    {de&&<div className="modal-overlay" onClick={()=>setDe(null)}><div className="modal-content" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
+      <div className="detail-char-area">{ch?.imageFile&&iC[ch.imageFile]?<img src={iC[ch.imageFile]} alt="" className="detail-char-img"/>:<div className="detail-char-img" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,background:'var(--bg-secondary)'}}>🧸</div>}{ch&&<span style={{fontSize:12,color:'var(--text-secondary)'}}>{ch.name}</span>}</div>
+      <div className="detail-bubble">{de.imageFile&&iC[de.imageFile]&&<img src={iC[de.imageFile]} alt="" className="detail-image"/>}{de.text&&<div className="detail-text">{de.text}</div>}{de.source&&<div className="bubble-source">— {de.source}</div>}</div>
+      {de.tags?.length>0&&<div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:12,justifyContent:'center'}}>{de.tags.map(t=><span key={t} className="tag-chip">{t}</span>)}</div>}
+      <div className="detail-float-actions"><button className="float-action-btn edit" onClick={()=>hEdit(de)}>✏️ 수정</button><button className="float-action-btn delete" onClick={()=>hDel(de)}>🗑 삭제</button><button className="float-action-btn close-btn" onClick={()=>setDe(null)}>닫기</button></div>
+    </div></div>}
+    {sef&&<EF entry={sef} data={data} save={save} sI={sI} rmI={rmI} iC={iC} onClose={()=>setSef(false)}/>}
+  </div>);
+}
+
+/* ── Status-based Popup System ── */
+const STATUS_KEY='happiness-popup-state';
+
+/* ── TodayWorkTime: 세 트래커 합산 오늘 작업시간 ── */
+function TodayWorkTime({onClick}){
+  const[total,setTotal]=useState(0);
+  useEffect(()=>{
+    const fmtTW=s=>{if(s<60)return'0m';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}h ${m}m`:`${m}m`};
+    const todayStr=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+
+    const readCommission=()=>{
+      try{const raw=localStorage.getItem('commission-tracker-data');if(!raw)return 0;
+        const d=JSON.parse(raw);let sec=0;const now=new Date();now.setHours(0,0,0,0);
+        const ts=now.getTime(),te=ts+86400000;
+        (d.commissions||[]).forEach(c=>(c.sessions||[]).forEach(s=>{if(s.date>=ts&&s.date<te)sec+=s.duration||0}));
+        return sec;
+      }catch{return 0}
+    };
+
+    const readDoujinshi=()=>new Promise(res=>{
+      try{const rq=indexedDB.open('doujinshi-tracker-db');
+        rq.onupgradeneeded=()=>{rq.transaction.abort()};
+        rq.onerror=()=>res(0);rq.onblocked=()=>res(0);
+        rq.onsuccess=e=>{const db=e.target.result;
+          try{if(!db.objectStoreNames.contains('projects')){db.close();return res(0)}
+            const tx=db.transaction('projects','readonly');
+            const r=tx.objectStore('projects').get('dailyLog');
+            r.onsuccess=ev=>{db.close();const rec=ev.target.result;
+              const log=rec&&rec.value?rec.value:{};res(log[todayStr()]||0)};
+            r.onerror=()=>{db.close();res(0)};
+          }catch{db.close();res(0)}};
+      }catch{res(0)}
+    });
+
+    const readNovel=()=>new Promise(res=>{
+      try{const rq=indexedDB.open('novel-tracker-db');
+        rq.onupgradeneeded=()=>{rq.transaction.abort()};
+        rq.onerror=()=>res(0);rq.onblocked=()=>res(0);
+        rq.onsuccess=e=>{const db=e.target.result;
+          try{if(!db.objectStoreNames.contains('store')){db.close();return res(0)}
+            const tx=db.transaction('store','readonly');
+            const r=tx.objectStore('store').get('dailyLog');
+            r.onsuccess=ev=>{db.close();const rec=ev.target.result;
+              const log=rec&&rec.value?rec.value:{};res(log[todayStr()]||0)};
+            r.onerror=()=>{db.close();res(0)};
+          }catch{db.close();res(0)}};
+      }catch{res(0)}
+    });
+
+    const readManual=async()=>{
+      try{const db=await new Promise((res,rej)=>{const r=indexedDB.open('CharHappyCal',1);r.onupgradeneeded=()=>{r.transaction.abort()};r.onerror=()=>rej();r.onblocked=()=>rej();r.onsuccess=()=>res(r.result)});
+        const tx=db.transaction('meta','readonly');const rq=tx.objectStore('meta').get('manualLog');
+        return new Promise(res=>{rq.onsuccess=()=>{db.close();const log=rq.result||{};const entry=log[todayStr()]||{};res((entry.dev||0)+(entry.etc||0))};rq.onerror=()=>{db.close();res(0)}});
+      }catch{return 0}
+    };
+
+    const readRemoteManual=async()=>{
+      try{const doc=await fireDb.collection('remoteManualLog').doc(todayStr()).get();
+        if(!doc.exists)return 0;const d=doc.data();return(d.dev||0)+(d.etc||0);
+      }catch{return 0}
+    };
+
+    // 동인지 트래커에서 작업량(만화 페이지 + 글쓰기) 읽기
+    const readDoujinshiOutput=()=>new Promise(res=>{
+      try{const rq=indexedDB.open('doujinshi-tracker-db');
+        rq.onupgradeneeded=()=>{rq.transaction.abort()};
+        rq.onerror=()=>res({});rq.onblocked=()=>res({});
+        rq.onsuccess=e=>{const db=e.target.result;
+          try{if(!db.objectStoreNames.contains('projects')){db.close();return res({})}
+            const tx=db.transaction('projects','readonly');
+            const r=tx.objectStore('projects').get('data');
+            r.onsuccess=ev=>{db.close();
+              const prjs=ev.target.result&&ev.target.result.value?ev.target.result.value:[];
+              const tk=todayStr();let conti=0,rough=0,artwork=0,wPages=0,wChars=0;
+              prjs.forEach(p=>{
+                if(p.category==='manga'){
+                  // 만화: doneDate가 오늘인 페이지 수
+                  (p.conti||[]).forEach(pg=>{if(pg.done&&pg.doneDate===tk)conti++});
+                  (p.rough||[]).forEach(pg=>{if(pg.done&&pg.doneDate===tk)rough++});
+                  (p.artwork||[]).forEach(pg=>{if(pg.done&&pg.doneDate===tk)artwork++});
+                } else if(p.category==='novel'){
+                  // 글쓰기: writingLogs에서 오늘 합산
+                  (p.writingLogs||[]).forEach(l=>{if(l.date===tk){
+                    if(p.writingUnit==='pages')wPages+=l.amount;else wChars+=l.amount;
+                  }});
+                }
+              });
+              res({dojConti:conti,dojRough:rough,dojArtwork:artwork,dojWritingPages:wPages,dojWritingChars:wChars});
+            };
+            r.onerror=()=>{db.close();res({})};
+          }catch{db.close();res({})}};
+      }catch{res({})}
+    });
+
+    // 소설 트래커에서 일일 글자수 읽기
+    const readNovelOutput=()=>new Promise(res=>{
+      try{const rq=indexedDB.open('novel-tracker-db');
+        rq.onupgradeneeded=()=>{rq.transaction.abort()};
+        rq.onerror=()=>res(0);rq.onblocked=()=>res(0);
+        rq.onsuccess=e=>{const db=e.target.result;
+          try{if(!db.objectStoreNames.contains('store')){db.close();return res(0)}
+            const tx=db.transaction('store','readonly');
+            const r=tx.objectStore('store').get('dailyWritingLog');
+            r.onsuccess=ev=>{db.close();const log=ev.target.result&&ev.target.result.value?ev.target.result.value:{};res(log[todayStr()]||0)};
+            r.onerror=()=>{db.close();res(0)};
+          }catch{db.close();res(0)}};
+      }catch{res(0)}
+    });
+
+    const update=async()=>{
+      const[c,d,n,m,rm,dojOut,novelChars]=await Promise.all([Promise.resolve(readCommission()),readDoujinshi(),readNovel(),readManual(),readRemoteManual(),readDoujinshiOutput(),readNovelOutput()]);
+      setTotal(c+d+n+m+rm);
+      syncToFirebase(todayStr(),{comm:c,doj:d,novel:n,manual:m,total:c+d+n+m,updatedAt:Date.now(),
+        workOutput:{dojConti:dojOut.dojConti||0,dojRough:dojOut.dojRough||0,dojArtwork:dojOut.dojArtwork||0,dojWritingPages:dojOut.dojWritingPages||0,dojWritingChars:dojOut.dojWritingChars||0,novelChars:novelChars}
+      });
+    };
+    update();const iv=setInterval(update,15000);return()=>clearInterval(iv);
+  },[]);
+
+  const fmtTW=s=>{if(s<60)return'0m';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}h ${m}m`:`${m}m`};
+  return(<div className="today-work-badge" title="오늘의 총 작업시간 — 클릭하여 통계 보기" onClick={onClick} style={{cursor:onClick?'pointer':'default'}}>⏱ 오늘 <span className="tw-time">{fmtTW(total)}</span></div>);
+}
+function getPS(){try{return JSON.parse(localStorage.getItem(STATUS_KEY))||{}}catch{return{}}}
+function setPS(s){localStorage.setItem(STATUS_KEY,JSON.stringify(s))}
+
+const STATUS_META={work:{emoji:'🔥',label:'작업 중',color:'var(--accent)'},rest:{emoji:'☕',label:'휴식 중',color:'var(--success)'},off:{emoji:'🌙',label:'오프',color:'var(--text-muted)'}};
+const STATUS_ORDER=['work','rest','off'];
+
+function StatusBtn({data,save}){
+  const st=data.settings.myStatus||'off';
+  const meta=STATUS_META[st];
+  const cycle=()=>{const i=(STATUS_ORDER.indexOf(st)+1)%STATUS_ORDER.length;const ns=STATUS_ORDER[i];save({...data,settings:{...data.settings,myStatus:ns}});setPS({...getPS(),lastTrigger:Date.now(),nextInterval:(20+Math.random()*20)*60})};
+  return(<button className="status-btn" onClick={cycle} title={`${meta.label} — 클릭하여 변경`} style={{borderColor:meta.color}}>
+    <span>{meta.emoji}</span>
+    <span style={{color:meta.color}}>{meta.label}</span>
+    {st!=='off'&&<span className="status-btn-dot" style={{background:meta.color}}/>}
+  </button>);
+}
+
+/* ── Chime Sound (부드러운 차임벨 - 뽀모도로와 구별) ── */
+function playChime(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const notes=[523.25,659.25,783.99]; /* C5 E5 G5 - 밝은 화음 */
+    notes.forEach((freq,i)=>{
+      const osc=ctx.createOscillator();const gain=ctx.createGain();
+      osc.type='sine';osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0,ctx.currentTime+i*0.15);
+      gain.gain.linearRampToValueAtTime(0.12,ctx.currentTime+i*0.15+0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.15+0.6);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(ctx.currentTime+i*0.15);osc.stop(ctx.currentTime+i*0.15+0.6);
+    });
+    setTimeout(()=>ctx.close(),2000);
+  }catch(e){}
+}
+
+function PopupToast({data,iC}){
+  const[show,setShow]=useState(false),[hiding,setHiding]=useState(false),[line,setLine]=useState(''),[char,setChar]=useState(null);
+  const timerRef=useRef(null);const checkRef=useRef(null);
+  const blinkRef=useRef(null);const origTitle=useRef(document.title);const pendingRef=useRef(null);
+
+  const pickLine=(status)=>{
+    const pool=data.popupLines.filter(l=>!l.mood||l.mood==='both'||l.mood===status);
+    if(!pool.length)return null;
+    return pool[Math.floor(Math.random()*pool.length)];
+  };
+  const pickChar=(ln)=>{
+    if(ln.characterId){const c=data.characters.find(x=>x.id===ln.characterId);if(c)return c}
+    return data.characters.length?data.characters[Math.floor(Math.random()*data.characters.length)]:null;
+  };
+
+  const stopBlink=useCallback(()=>{
+    if(blinkRef.current){clearInterval(blinkRef.current);blinkRef.current=null}
+    document.title=origTitle.current;
+  },[]);
+
+  const startBlink=useCallback((name)=>{
+    stopBlink();
+    let on=true;
+    blinkRef.current=setInterval(()=>{document.title=on?`💬 ${name||'캐릭터'}의 메시지!`:origTitle.current;on=!on},1000);
+  },[stopBlink]);
+
+  const showPopup=useCallback((ln,ch)=>{
+    setChar(ch);setLine(ln);setShow(true);setHiding(false);
+    if(timerRef.current)clearTimeout(timerRef.current);
+    timerRef.current=setTimeout(()=>{setHiding(true);setTimeout(()=>setShow(false),400)},10000);
+  },[]);
+
+  /* 탭 돌아왔을 때 밀린 팝업 표시 */
+  useEffect(()=>{
+    const onVisible=()=>{
+      if(!document.hidden&&pendingRef.current){
+        const{text,ch}=pendingRef.current;pendingRef.current=null;
+        stopBlink();showPopup(text,ch);
+      }
+    };
+    document.addEventListener('visibilitychange',onVisible);
+    return()=>document.removeEventListener('visibilitychange',onVisible);
+  },[showPopup,stopBlink]);
+
+  useEffect(()=>{
+    const handler=()=>{
+      const st=data.settings.myStatus||'off';const status=st==='off'?'work':st;
+      const ln=pickLine(status);if(!ln)return;
+      showPopup(ln.text,pickChar(ln));
+    };
+    window.addEventListener('test-popup',handler);
+    return()=>window.removeEventListener('test-popup',handler);
+  },[data.popupLines,data.characters,data.settings.myStatus,showPopup]);
+
+  useEffect(()=>{
+    const status=data.settings.myStatus||'off';
+    if(status==='off'||!data.settings.popupEnabled||!data.popupLines.length)return;
+    const check=()=>{
+      const curStatus=data.settings.myStatus||'off';
+      if(curStatus==='off'||!data.popupLines.length||!data.settings.popupEnabled)return;
+      const ps=getPS();const now=Date.now();
+      const elapsed=now-(ps.lastTrigger||now);const interval=(ps.nextInterval||1800)*1000;
+      if(!ps.lastTrigger){setPS({...ps,lastTrigger:now,nextInterval:(20+Math.random()*20)*60});return}
+      if(elapsed>=interval){
+        const ln=pickLine(curStatus);if(!ln){setPS({...ps,lastTrigger:now,nextInterval:(20+Math.random()*20)*60});return}
+        const ch=pickChar(ln);
+        if(document.hidden){
+          pendingRef.current={text:ln.text,ch};
+          startBlink(ch?.name);
+          playChime();
+          if(Notification.permission==='granted'){
+            try{new Notification(ch?.name||'캐릭터',{body:ln.text,icon:'📖',tag:'happiness-popup'})}catch(e){}
+          }
+        }else{showPopup(ln.text,ch)}
+        setPS({lastTrigger:now,nextInterval:(20+Math.random()*20)*60});
+      }
+    };
+    check();checkRef.current=setInterval(check,15000);
+    return()=>{if(checkRef.current)clearInterval(checkRef.current);if(timerRef.current)clearTimeout(timerRef.current);stopBlink()};
+  },[data.settings.popupEnabled,data.settings.myStatus,data.popupLines,data.characters,iC,showPopup,startBlink,stopBlink]);
+
+  const dismiss=()=>{setHiding(true);setTimeout(()=>setShow(false),400)};
+  if(!show)return null;
+  const ci=char?.imageFile&&iC[char.imageFile];
+  return(<div className={`popup-toast${hiding?' hiding':''}`}>
+    <button className="popup-toast-close" onClick={dismiss}>✕</button>
+    {ci?<img src={ci} alt="" className="popup-toast-avatar"/>:<div className="popup-toast-avatar-placeholder">🧸</div>}
+    <div className="popup-toast-body">{char&&<div className="popup-toast-name">{char.name}</div>}<div className="popup-toast-text">{line}</div></div>
+  </div>);
+}
+
+/* ── StatsTab: 세 트래커 합산 월별 통계 + 히트맵 ── */
+function StatsTab(){
+  const[month,setMonth]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()}});
+  const[commLog,setCommLog]=useState({});
+  const[remoteManLog,setRemoteManLog]=useState({});
+  const[doodleLog,setDoodleLog]=useState({});
+  const[dojLog,setDojLog]=useState({});
+  const[novelLog,setNovelLog]=useState({});
+  const[manualLog,setManualLog]=useState({});
+  const[hover,setHover]=useState(null);
+  const[selDay,setSelDay]=useState(null);
+  const[manMin,setManMin]=useState('');
+  const[manCat,setManCat]=useState('dev');
+  const[manDate,setManDate]=useState(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`});
+
+  const fmtT=s=>{if(!s||s<60)return'0m';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}h ${m}m`:`${m}m`};
+  const fmtTL=s=>{if(!s||s<60)return'0분';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}시간 ${m}분`:`${m}분`};
+  const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const todayStr=dateKey(new Date());
+
+  const saveManualLog=async(log)=>{try{await idbPut('meta','manualLog',log)}catch(e){console.error(e)}};
+
+  useEffect(()=>{
+    const loadComm=()=>{
+      try{const raw=localStorage.getItem('commission-tracker-data');if(!raw)return{comm:{},doodle:{}};
+        const d=JSON.parse(raw);const comm={},doodle={};
+        const ctypes=d.customTypes||[];
+        const checkDoodle=t=>{const ct=ctypes.find(x=>x.name===t);return ct?ct.category==='doodle':t&&t.indexOf('낙서:')===0};
+        (d.commissions||[]).forEach(c=>{
+          const target=checkDoodle(c.type)?doodle:comm;
+          (c.sessions||[]).forEach(s=>{
+            const dt=new Date(s.date);const k=dateKey(dt);target[k]=(target[k]||0)+(s.duration||0);
+          });
+        });return{comm,doodle};
+      }catch{return{comm:{},doodle:{}}}
+    };
+    const loadDoj=()=>new Promise(res=>{
+      try{const rq=indexedDB.open('doujinshi-tracker-db');
+        rq.onupgradeneeded=()=>{rq.transaction.abort()};
+        rq.onerror=()=>res({});rq.onblocked=()=>res({});
+        rq.onsuccess=e=>{const db=e.target.result;
+          try{if(!db.objectStoreNames.contains('projects')){db.close();return res({})}
+            const tx=db.transaction('projects','readonly');
+            const r=tx.objectStore('projects').get('dailyLog');
+            r.onsuccess=ev=>{db.close();const rec=ev.target.result;res(rec&&rec.value?rec.value:{})};
+            r.onerror=()=>{db.close();res({})};
+          }catch{db.close();res({})}};
+      }catch{res({})}
+    });
+    const loadNovel=()=>new Promise(res=>{
+      try{const rq=indexedDB.open('novel-tracker-db');
+        rq.onupgradeneeded=()=>{rq.transaction.abort()};
+        rq.onerror=()=>res({});rq.onblocked=()=>res({});
+        rq.onsuccess=e=>{const db=e.target.result;
+          try{if(!db.objectStoreNames.contains('store')){db.close();return res({})}
+            const tx=db.transaction('store','readonly');
+            const r=tx.objectStore('store').get('dailyLog');
+            r.onsuccess=ev=>{db.close();const rec=ev.target.result;res(rec&&rec.value?rec.value:{})};
+            r.onerror=()=>{db.close();res({})};
+          }catch{db.close();res({})}};
+      }catch{res({})}
+    });
+    const loadManual=async()=>{try{const v=await idbGet('meta','manualLog');return v||{}}catch{return{}}};
+    const loadRemoteManual=async()=>{
+      try{const snap=await fireDb.collection('remoteManualLog').get();
+        const log={};snap.forEach(doc=>{log[doc.id]=doc.data()});return log;
+      }catch{return{}}
+    };
+    (async()=>{
+      const[cd,d,n,ml,rml]=await Promise.all([Promise.resolve(loadComm()),loadDoj(),loadNovel(),loadManual(),loadRemoteManual()]);
+      setCommLog(cd.comm);setDoodleLog(cd.doodle);setDojLog(d);setNovelLog(n);setManualLog(ml);setRemoteManLog(rml);
+    })();
+  },[]);
+
+  const addManual=()=>{
+    const mins=parseInt(manMin);if(!mins||mins<=0)return;
+    const key=manDate;const sec=mins*60;
+    const updated={...manualLog};
+    if(!updated[key])updated[key]={dev:0,etc:0};
+    updated[key][manCat]=(updated[key][manCat]||0)+sec;
+    setManualLog(updated);saveManualLog(updated);setManMin('');
+  };
+  const getManualLocal=(key,cat)=>(manualLog[key]&&manualLog[key][cat])||0;
+  const getManualRemote=(key,cat)=>(remoteManLog[key]&&remoteManLog[key][cat])||0;
+  const getManual=(key,cat)=>getManualLocal(key,cat)+getManualRemote(key,cat);
+
+  const prevMonth=()=>{setSelDay(null);setMonth(p=>p.m===0?{y:p.y-1,m:11}:{y:p.y,m:p.m-1})};
+  const nextMonth=()=>{setSelDay(null);setMonth(p=>p.m===11?{y:p.y+1,m:0}:{y:p.y,m:p.m+1})};
+  const goToday=()=>{setSelDay(null);const d=new Date();setMonth({y:d.getFullYear(),m:d.getMonth()})};
+
+  const buildCal=()=>{
+    const first=new Date(month.y,month.m,1);
+    const lastDay=new Date(month.y,month.m+1,0).getDate();
+    const startDow=first.getDay();
+    const cells=[];
+    for(let i=0;i<startDow;i++)cells.push(null);
+    for(let d=1;d<=lastDay;d++){
+      const key=`${month.y}-${String(month.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const c=commLog[key]||0,dl=doodleLog[key]||0,dj=dojLog[key]||0,nv=novelLog[key]||0;
+      const dev=getManual(key,'dev'),etc=getManual(key,'etc');
+      cells.push({day:d,key,comm:c,doodle:dl,doj:dj,novel:nv,dev,etc,total:c+dl+dj+nv+dev+etc});
+    }
+    return cells;
+  };
+
+  const cells=buildCal();
+  const now=new Date();const isCurrentMonth=month.y===now.getFullYear()&&month.m===now.getMonth();
+  const monthCells=cells.filter(c=>c!==null);
+  const monthTotal=monthCells.reduce((s,c)=>s+c.total,0);
+  const workDays=monthCells.filter(c=>c.total>0).length;
+  const avgPerWorkDay=workDays>0?Math.round(monthTotal/workDays):0;
+  const maxDay=monthCells.reduce((mx,c)=>c.total>mx.total?c:mx,{total:0});
+
+  const monthComm=monthCells.reduce((s,c)=>s+c.comm,0);
+  const monthDoodle=monthCells.reduce((s,c)=>s+c.doodle,0);
+  const monthDoj=monthCells.reduce((s,c)=>s+c.doj,0);
+  const monthNovel=monthCells.reduce((s,c)=>s+c.novel,0);
+  const monthDev=monthCells.reduce((s,c)=>s+c.dev,0);
+  const monthEtc=monthCells.reduce((s,c)=>s+c.etc,0);
+  const trackerMax=Math.max(monthComm,monthDoodle,monthDoj,monthNovel,monthDev,monthEtc,1);
+
+  useEffect(()=>{
+    if(monthCells.length>0){
+      const ym=`${month.y}-${String(month.m+1).padStart(2,'0')}`;
+      syncMonthToFirebase(ym,cells,remoteManLog);
+    }
+  },[commLog,doodleLog,dojLog,novelLog,manualLog,remoteManLog,month.y,month.m]);
+
+  const maxTotal=Math.max(...monthCells.map(c=>c.total),1);
+  const getLevel=t=>{if(t===0)return 0;const r=t/maxTotal;if(r<0.25)return 1;if(r<0.5)return 2;if(r<0.75)return 3;return 4};
+
+  const DOW=['일','월','화','수','목','금','토'];
+  const MONTH_NAMES=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  return(<div className="stats-container">
+    {/* 수동 입력 */}
+    <div className="stats-section">
+      <div className="stats-section-title">✏️ 기타 작업 기록</div>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <input type="date" value={manDate} onChange={e=>setManDate(e.target.value)} max={todayStr} style={{padding:'6px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontFamily:'inherit',fontSize:13}}/>
+        <select value={manCat} onChange={e=>setManCat(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontFamily:'inherit',fontSize:13}}>
+          <option value="dev">🛠 개발</option>
+          <option value="etc">📦 기타</option>
+        </select>
+        <input type="number" value={manMin} onChange={e=>setManMin(e.target.value)} placeholder="분" min="1" style={{width:70,padding:'6px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontFamily:'inherit',fontSize:13,textAlign:'center'}} onKeyDown={e=>e.key==='Enter'&&addManual()}/>
+        <button onClick={addManual} style={{padding:'6px 14px',border:'1px solid var(--accent)',borderRadius:'var(--radius-sm)',background:'var(--accent)',color:'white',fontFamily:'inherit',fontSize:12,cursor:'pointer'}}>추가</button>
+      </div>
+      {(getManual(manDate,'dev')>0||getManual(manDate,'etc')>0)&&<div style={{marginTop:8,fontSize:12,color:'var(--text-secondary)',display:'flex',gap:12}}>
+        <span style={{color:'var(--text-muted)'}}>{manDate===todayStr?'오늘':manDate.slice(5).replace('-','/')}:</span>
+        {getManual(manDate,'dev')>0&&<span>🛠 개발 {fmtT(getManual(manDate,'dev'))}</span>}
+        {getManual(manDate,'etc')>0&&<span>📦 기타 {fmtT(getManual(manDate,'etc'))}</span>}
+      </div>}
+    </div>
+
+    <div className="stats-summary">
+      <div className="stat-card"><div className="stat-card-value">{fmtT(monthTotal)}</div><div className="stat-card-label">이번 달 총 작업</div></div>
+      <div className="stat-card"><div className="stat-card-value">{workDays}일</div><div className="stat-card-label">작업한 날</div></div>
+      <div className="stat-card"><div className="stat-card-value">{fmtT(avgPerWorkDay)}</div><div className="stat-card-label">작업일 평균</div></div>
+    </div>
+
+    <div className="stats-section">
+      <div className="heatmap-header">
+        <div className="stats-section-title">🗓 작업 히트맵</div>
+        <div className="heatmap-nav">
+          <button onClick={prevMonth}>◀</button>
+          <span className="heatmap-month">{month.y}년 {MONTH_NAMES[month.m]}</span>
+          <button onClick={nextMonth}>▶</button>
+          {!isCurrentMonth&&<button onClick={goToday} style={{fontSize:11}}>오늘</button>}
+        </div>
+      </div>
+      <div className="heatmap-grid">
+        {DOW.map(d=><div key={d} className="heatmap-dow">{d}</div>)}
+        {cells.map((c,i)=>{
+          if(c===null)return <div key={`e${i}`} className="heatmap-cell empty"/>;
+          const lv=getLevel(c.total);
+          const isToday=c.key===todayStr;
+          const isSel=selDay&&selDay.key===c.key;
+          return <div key={c.key} className={`heatmap-cell lv${lv}${isToday?' today-cell':''}${isSel?' selected-cell':''}`}
+            onClick={()=>setSelDay(isSel?null:c)} style={{cursor:'pointer'}}
+            onMouseEnter={()=>setHover(c)} onMouseLeave={()=>setHover(null)}>
+            {hover&&hover.key===c.key&&<div className="heatmap-tooltip">{c.day}일 — {c.total>0?fmtTL(c.total):'작업 없음'}</div>}
+          </div>;
+        })}
+      </div>
+      <div className="heatmap-legend">
+        <span>적음</span>
+        <div className="heatmap-legend-cell lv0"/><div className="heatmap-legend-cell lv1"/><div className="heatmap-legend-cell lv2"/><div className="heatmap-legend-cell lv3"/><div className="heatmap-legend-cell lv4"/>
+        <span>많음</span>
+      </div>
+      {selDay&&<div className="day-detail">
+        <div className="day-detail-header">
+          <span className="day-detail-date">{month.y}년 {month.m+1}월 {selDay.day}일</span>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="day-detail-total">{selDay.total>0?fmtTL(selDay.total):'작업 없음'}</span>
+            <button className="day-detail-close" onClick={()=>setSelDay(null)} title="닫기">✕</button>
+          </div>
+        </div>
+        {selDay.total===0?<div className="day-detail-empty">이 날은 기록된 작업이 없어요</div>:
+        <div className="day-detail-rows">
+          {selDay.comm>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#E8945A'}}/><span className="day-detail-name">커미션</span><span className="day-detail-time">{fmtT(selDay.comm)}</span></div>}
+          {selDay.doodle>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#F4B183'}}/><span className="day-detail-name">일러스트</span><span className="day-detail-time">{fmtT(selDay.doodle)}</span></div>}
+          {selDay.doj>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#B48CDE'}}/><span className="day-detail-name">동인지</span><span className="day-detail-time">{fmtT(selDay.doj)}</span></div>}
+          {selDay.novel>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#5BA87A'}}/><span className="day-detail-name">웹소설</span><span className="day-detail-time">{fmtT(selDay.novel)}</span></div>}
+          {selDay.dev>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#4A90D9'}}/><span className="day-detail-name">개발</span><span className="day-detail-time">{fmtT(selDay.dev)}</span></div>}
+          {selDay.etc>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#999'}}/><span className="day-detail-name">기타</span><span className="day-detail-time">{fmtT(selDay.etc)}</span></div>}
+        </div>}
+      </div>}
+    </div>
+
+    <div className="stats-section">
+      <div className="stats-section-title">📊 이번 달 트래커별 현황</div>
+      <div className="tracker-breakdown">
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#E8945A'}}/><span className="tracker-name">커미션</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthComm/trackerMax*100)}%`,background:'#E8945A'}}/></div><span className="tracker-time">{fmtT(monthComm)}</span></div>
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#F4B183'}}/><span className="tracker-name">일러스트</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDoodle/trackerMax*100)}%`,background:'#F4B183'}}/></div><span className="tracker-time">{fmtT(monthDoodle)}</span></div>
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#B48CDE'}}/><span className="tracker-name">동인지</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDoj/trackerMax*100)}%`,background:'#B48CDE'}}/></div><span className="tracker-time">{fmtT(monthDoj)}</span></div>
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#5BA87A'}}/><span className="tracker-name">웹소설</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthNovel/trackerMax*100)}%`,background:'#5BA87A'}}/></div><span className="tracker-time">{fmtT(monthNovel)}</span></div>
+        {(monthDev>0||monthEtc>0)&&<div style={{borderTop:'1px solid var(--border-light)',marginTop:4,paddingTop:4}}/>}
+        {monthDev>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#4A90D9'}}/><span className="tracker-name">개발</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDev/trackerMax*100)}%`,background:'#4A90D9'}}/></div><span className="tracker-time">{fmtT(monthDev)}</span></div>}
+        {monthEtc>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#999'}}/><span className="tracker-name">기타</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthEtc/trackerMax*100)}%`,background:'#999'}}/></div><span className="tracker-time">{fmtT(monthEtc)}</span></div>}
+      </div>
+    </div>
+
+    {maxDay.total>0&&<div className="stats-section">
+      <div className="stats-section-title">🏆 이달의 최고 기록</div>
+      <div style={{fontSize:13,color:'var(--text-secondary)'}}>
+        <span style={{fontWeight:600,color:'var(--accent)'}}>{maxDay.day}일</span>에 <span style={{fontWeight:600,color:'var(--accent)'}}>{fmtTL(maxDay.total)}</span> 작업했어요!
+      </div>
+    </div>}
+  </div>);
+}
+
+function PopupTab({data,save,iC}){
+  const[newText,setNewText]=useState(''),[newCharId,setNewCharId]=useState(''),[newMood,setNewMood]=useState('both');
+  const[editId,setEditId]=useState(null),[editText,setEditText]=useState(''),[editCharId,setEditCharId]=useState(''),[editMood,setEditMood]=useState('both');
+  const addLine=()=>{const t=newText.trim();if(!t)return;save({...data,popupLines:[...data.popupLines,{id:gid(),text:t,characterId:newCharId||null,mood:newMood}]});setNewText('');setNewCharId('');setNewMood('both')};
+  const delLine=id=>save({...data,popupLines:data.popupLines.filter(l=>l.id!==id)});
+  const startEdit=l=>{setEditId(l.id);setEditText(l.text);setEditCharId(l.characterId||'');setEditMood(l.mood||'both')};
+  const saveEdit=()=>{if(!editText.trim())return;save({...data,popupLines:data.popupLines.map(l=>l.id===editId?{...l,text:editText.trim(),characterId:editCharId||null,mood:editMood}:l)});setEditId(null)};
+  const toggleEnabled=()=>save({...data,settings:{...data.settings,popupEnabled:!data.settings.popupEnabled}});
+  const getCharName=id=>{const c=data.characters.find(x=>x.id===id);return c?c.name:null};
+  const MOOD_LABEL={work:'🔥 작업',rest:'☕ 휴식',both:'✨ 공용'};
+  const curStatus=data.settings.myStatus||'off';
+  const[notifPerm,setNotifPerm]=useState(typeof Notification!=='undefined'?Notification.permission:'denied');
+  const requestNotif=async()=>{if(typeof Notification==='undefined')return;const p=await Notification.requestPermission();setNotifPerm(p)};
+
+  return(<div className="popup-container">
+    <div className="popup-toggle-row">
+      <div><div className="popup-toggle-label">팝업 알림</div><div className="popup-toggle-sub">좌하단 상태 버튼으로 작업/휴식 전환 → 20~40분마다 캐릭터가 말을 걸어요</div></div>
+      <label className="toggle-switch"><input type="checkbox" checked={data.settings.popupEnabled} onChange={toggleEnabled}/><div className="toggle-track"/><div className="toggle-knob"/></label>
+    </div>
+    {notifPerm!=='granted'&&<div className="popup-toggle-row" style={{marginBottom:12}}>
+      <div><div className="popup-toggle-label">OS 알림</div><div className="popup-toggle-sub">탭을 보고 있지 않을 때 바탕화면에 알림을 띄워줍니다</div></div>
+      <button className="add-btn" onClick={requestNotif} style={{flexShrink:0}}>허용하기</button>
+    </div>}
+    {notifPerm==='granted'&&<div style={{fontSize:11,color:'var(--success)',marginBottom:12}}>OS 알림이 활성화되어 있습니다</div>}
+    <div style={{display:'flex',gap:8,marginBottom:16,alignItems:'center'}}>
+      <button className="add-btn" style={{background:'var(--success)'}} onClick={()=>window.dispatchEvent(new Event('test-popup'))}>🔔 테스트 팝업</button>
+      <span style={{fontSize:12,color:'var(--text-muted)'}}>현재 상태: {STATUS_META[curStatus].emoji} {STATUS_META[curStatus].label}</span>
+    </div>
+    <div className="manage-section">
+      <div className="section-header"><span className="section-title">대사 목록</span><span className="count-badge">{data.popupLines.length}개</span></div>
+      <div className="popup-stats"><span>등록된 캐릭터: {data.characters.length}명</span><span>상태: {data.settings.popupEnabled?'✅ 활성':'⏸ 비활성'}</span></div>
+      {!data.popupLines.length&&<div className="empty-state" style={{padding:'24px 16px'}}><div className="empty-state-icon" style={{fontSize:32}}>💬</div><div className="empty-state-title" style={{fontSize:15}}>대사가 없어요</div><div className="empty-state-desc">캐릭터가 말할 대사를 추가해보세요!</div></div>}
+      {data.popupLines.map(l=><div key={l.id} className="popup-line-card">
+        {editId===l.id?<div style={{flex:1,display:'flex',flexDirection:'column',gap:6}}>
+          <textarea className="form-textarea" style={{minHeight:36,fontSize:13}} value={editText} onChange={e=>setEditText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();saveEdit()}}}/>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+            <select className="form-select" style={{flex:1,padding:'5px 8px',fontSize:12,minWidth:100}} value={editCharId} onChange={e=>setEditCharId(e.target.value)}><option value="">🎲 랜덤 캐릭터</option>{data.characters.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+            <select className="form-select" style={{width:100,padding:'5px 8px',fontSize:12}} value={editMood} onChange={e=>setEditMood(e.target.value)}><option value="both">✨ 공용</option><option value="work">🔥 작업</option><option value="rest">☕ 휴식</option></select>
+            <button className="item-action-btn" onClick={saveEdit}>✅</button><button className="item-action-btn" onClick={()=>setEditId(null)}>✕</button>
+          </div></div>:<>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:2}}>
+              {l.characterId&&getCharName(l.characterId)?<span style={{fontSize:10,fontWeight:600,color:'var(--accent)'}}>{getCharName(l.characterId)}</span>:<span style={{fontSize:10,color:'var(--text-muted)'}}>🎲 랜덤</span>}
+              <span className={`popup-mood-chip ${l.mood||'both'}`}>{MOOD_LABEL[l.mood||'both']}</span>
+            </div>
+            <div className="popup-line-text">{l.text}</div>
+          </div>
+          <div className="item-actions"><button className="item-action-btn" onClick={()=>startEdit(l)}>✏️</button><button className="item-action-btn danger" onClick={()=>delLine(l.id)}>🗑</button></div>
+        </>}
+      </div>)}
+      <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:6}}>
+        <div style={{display:'flex',gap:8}}>
+          <textarea style={{flex:1,padding:'10px 14px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontSize:13,resize:'none',minHeight:42,outline:'none',fontFamily:'var(--font-body)',lineHeight:1.5}} value={newText} onChange={e=>setNewText(e.target.value)} placeholder="새 대사를 입력해주세요..." onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addLine()}}}/>
+          <button className="add-btn" style={{alignSelf:'flex-end'}} onClick={addLine}>추가</button>
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <select className="form-select" style={{flex:1,padding:'6px 10px',fontSize:12}} value={newCharId} onChange={e=>setNewCharId(e.target.value)}><option value="">🎲 랜덤 캐릭터가 말해요</option>{data.characters.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <select className="form-select" style={{width:100,padding:'6px 10px',fontSize:12}} value={newMood} onChange={e=>setNewMood(e.target.value)}><option value="both">✨ 공용</option><option value="work">🔥 작업</option><option value="rest">☕ 휴식</option></select>
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+
+function AuthGate({children}){
+  const[user,setUser]=useState(null);
+  const[checking,setChecking]=useState(true);
+  const[err,setErr]=useState('');
+  useEffect(()=>{const unsub=fireAuth.onAuthStateChanged(u=>{setUser(u);setChecking(false)});return unsub},[]);
+  const doLogin=()=>{setErr('');fireAuth.signInWithPopup(googleProvider).catch(e=>{console.error('Auth error:',e);setErr(e.code==='auth/operation-not-allowed'?'Firebase 콘솔에서 Google 로그인을 활성화해주세요':'팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요.')})};
+  if(checking)return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg-primary)',color:'var(--text-muted)',fontFamily:'var(--font-body)'}}><p>확인 중...</p></div>);
+  if(!user)return(<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,background:'var(--bg-primary)',fontFamily:'var(--font-body)'}}>
+    <div style={{fontSize:48,marginBottom:8}}>📖</div>
+    <p style={{fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>캐릭터 행복 일력</p>
+    <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:8}}>Google 계정으로 로그인해주세요</p>
+    <button onClick={doLogin} style={{padding:'12px 32px',background:'var(--accent)',color:'#fff',border:'none',borderRadius:12,fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'var(--font-body)'}}>Google 로그인</button>
+    {err&&<p style={{color:'var(--danger)',fontSize:12,maxWidth:300,textAlign:'center'}}>{err}</p>}
+  </div>);
+  return children;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AuthGate><App/></AuthGate>);
+</script>
+</body>
+</html>
