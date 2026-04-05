@@ -621,15 +621,15 @@ function TodayWorkTime({onClick}){
         let rm=0;
         if(rmDoc.exists){const d=rmDoc.data();rm=(d.dev||0)+(d.etc||0)}
         // 수동 기록 (행복일력에서 입력한 것)
-        let manual=0;
-        if(mlDoc.exists){const ml=mlDoc.data().data||{};const entry=ml[tk]||{};manual=(entry.dev||0)+(entry.etc||0)}
+        let manDev=0,manEtc=0;
+        if(mlDoc.exists){const ml=mlDoc.data().data||{};const entry=ml[tk]||{};manDev=(entry.dev||0);manEtc=(entry.etc||0)}
         // 동인지 작업량(페이지 등)
         let dojOut={dojConti:0,dojRough:0,dojArtwork:0,dojWritingPages:0,dojWritingChars:0};
         if(dojDoc.exists){const wo=dojDoc.data().workOutput||{};const entry=wo[tk]||{};dojOut={dojConti:entry.conti||0,dojRough:entry.rough||0,dojArtwork:entry.artwork||0,dojWritingPages:entry.wPages||0,dojWritingChars:entry.wChars||0}}
 
-        const t=comm+doodle+doj+novel+manual;
+        const t=comm+doodle+doj+novel+manDev+manEtc;
         setTotal(t);
-        syncToFirebase(tk,{comm,doodle,doj,novel,manual,total:comm+doodle+doj+novel+manual,updatedAt:Date.now(),
+        syncToFirebase(tk,{comm,doodle,doj,novel,dev:manDev,etc:manEtc,manual:manDev+manEtc,total:comm+doodle+doj+novel+manDev+manEtc,updatedAt:Date.now(),
           workOutput:{...dojOut,novelChars}
         });
       }catch(e){console.warn('TodayWorkTime update failed:',e)}

@@ -198,7 +198,7 @@ function WorkStatsTab() {
     if (key === "doodle") return 0;
     if (key === "doj") return base.doj || 0;
     if (key === "novel") return base.novel || 0;
-    if (key === "dev") return (base.manual || base.dev || 0) ;
+    if (key === "dev") return (base.dev || 0);
     if (key === "etc") return (base.etc || 0) ;
     return 0;
   };
@@ -221,8 +221,8 @@ function WorkStatsTab() {
         monthGrandTotal += dayTotal;
         trackers.forEach(t => {
           let v = day[t.key] || 0;
-          // dev rmDev removed (already in dailyStats)
-          // etc rmEtc removed (already in dailyStats)
+          if (t.key === "dev") v = day.dev || 0;
+          if (t.key === "etc") v = day.etc || 0;
           monthTotals[t.key] += v;
         });
       }
