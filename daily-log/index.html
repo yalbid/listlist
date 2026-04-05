@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>오늘 한 일</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #1a1a2e; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes toast {
+    0% { opacity: 0; transform: translateY(10px) scale(0.95); }
+    15% { opacity: 1; transform: translateY(0) scale(1); }
+    85% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+  }
+  .entry-item { animation: fadeInUp 0.3s ease-out; }
+  .toast-msg { animation: toast 1.8s ease-in-out forwards; }
+  .cat-btn { transition: all 0.2s ease; }
+  .cat-btn:hover { transform: translateY(-2px); }
+  .cat-btn:active { transform: scale(0.96); }
+  .tab-btn { transition: all 0.2s ease; }
+  .tab-btn:hover { background: rgba(255,255,255,0.1) !important; }
+  .remove-btn { transition: all 0.15s ease; opacity: 0; }
+  .entry-row:hover .remove-btn { opacity: 1; }
+  .summary-card { animation: fadeInUp 0.4s ease-out backwards; }
+  input:focus { outline: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── Firebase 초기화 & 인증 ── */
+const firebaseApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
+const fireDb=firebaseApp.firestore();
+const fireAuth=firebaseApp.auth();
+const googleProvider=new firebase.auth.GoogleAuthProvider();
+
+const CATEGORIES = [
+  { id: "manga", label: "만화", emoji: "📖", color: "#e8927c" },
+  { id: "illust", label: "일러스트", emoji: "🎨", color: "#d4a574" },
+  { id: "writing", label: "글", emoji: "✍️", color: "#7cb5a0" },
+  { id: "dev", label: "개발", emoji: "💻", color: "#7ca3c4" },
+  { id: "etc", label: "기타", emoji: "📌", color: "#b39dcc" },
+];
+
+function getToday() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+function loadEntries(dateKey) {
+  try {
+    const raw = localStorage.getItem("dailylog:" + dateKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function saveEntries(dateKey, entries) {
+  try {
+    localStorage.setItem("dailylog:" + dateKey, JSON.stringify(entries));
+  } catch (e) { console.error("Storage error:", e); }
+}
+
+function saveEntriesToFirebase(dateKey, entries) {
+  try {
+    fireDb.collection("dailyLogEntries").doc(dateKey).set({ items: JSON.stringify(entries) })
+      .catch(e => console.warn("Firebase entry sync failed:", e));
+  } catch (e) { console.warn("Firebase entry sync failed:", e); }
+}
+
+async function loadEntriesFromFirebase(dateKey) {
+  try {
+    const doc = await fireDb.collection("dailyLogEntries").doc(dateKey).get();
+    if (!doc.exists) return [];
+    const data = doc.data();
+    if (data.items) return JSON.parse(data.items);
+    if (data.entries) return data.entries;
+    return [];
+  } catch (e) { console.warn("Firebase entry load failed:", e); return []; }
+}
+
+function mergeEntries(local, remote) {
+  const ids = new Set(local.map(e => e.id));
+  const merged = [...local];
+  remote.forEach(e => { if (!ids.has(e.id)) merged.push(e); });
+  merged.sort((a, b) => a.timestamp - b.timestamp);
+  return merged;
+}
+
+/* ── 작업 통계 탭 컴포넌트 ── */
+function WorkStatsTab() {
+  const [todayData, setTodayData] = useState(null);
+  const [monthData, setMonthData] = useState(null);
+  const [remoteManAll, setRemoteManAll] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [monthKey, setMonthKey] = useState(() => {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  });
+  const [manMin, setManMin] = useState("");
+  const [manCat, setManCat] = useState("dev");
+  const [manDate, setManDate] = useState(getToday);
+  const [manToast, setManToast] = useState(false);
+
+  const fmtSec = (s) => {
+    if (!s || s < 60) return "0분";
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h > 0 ? h + "시간 " + m + "분" : m + "분";
+  };
+
+  const todayKey = getToday();
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [tDoc, mDoc, rmSnap] = await Promise.all([
+        fireDb.collection("dailyStats").doc(todayKey).get(),
+        fireDb.collection("monthlyStats").doc(monthKey).get(),
+        fireDb.collection("remoteManualLog").get()
+      ]);
+      setTodayData(tDoc.exists ? tDoc.data() : null);
+      setMonthData(mDoc.exists ? mDoc.data() : null);
+      const rm = {};
+      rmSnap.forEach(doc => { rm[doc.id] = doc.data(); });
+      setRemoteManAll(rm);
+    } catch (e) { console.warn("Firebase read failed:", e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, [monthKey]);
+
+  const addManual = async () => {
+    const mins = parseInt(manMin);
+    if (!mins || mins <= 0) return;
+    const key = manDate;
+    const sec = mins * 60;
+    try {
+      const docRef = fireDb.collection("remoteManualLog").doc(key);
+      const doc = await docRef.get();
+      const prev = doc.exists ? doc.data() : { dev: 0, etc: 0 };
+      prev[manCat] = (prev[manCat] || 0) + sec;
+      await docRef.set(prev);
+      setManMin("");
+      setManToast(true);
+      setTimeout(() => setManToast(false), 1800);
+      loadData();
+    } catch (e) { console.warn("Manual save failed:", e); }
+  };
+
+  const trackers = [
+    { key: "comm", label: "커미션", emoji: "🎨", color: "#e8927c" },
+    { key: "doodle", label: "일러스트", emoji: "✏️", color: "#d4a574" },
+    { key: "doj", label: "동인지", emoji: "📖", color: "#c97ca0" },
+    { key: "novel", label: "웹소설", emoji: "✍️", color: "#7cb5a0" },
+    { key: "dev", label: "개발", emoji: "💻", color: "#7ca3c4" },
+    { key: "etc", label: "기타", emoji: "📌", color: "#b39dcc" },
+  ];
+
+  const prevMonth = () => {
+    setSelDay(null);
+    const [y, m] = monthKey.split("-").map(Number);
+    const nm = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+    setMonthKey(nm.y + "-" + String(nm.m).padStart(2, "0"));
+  };
+  const nextMonth = () => {
+    setSelDay(null);
+    const [y, m] = monthKey.split("-").map(Number);
+    const nm = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+    setMonthKey(nm.y + "-" + String(nm.m).padStart(2, "0"));
+  };
+
+  // 오늘 카테고리별 값 (dailyStats 기본값 + 원격 수동기록 항상 합산)
+  const rmToday = remoteManAll[todayKey] || {};
+  const getTodayVal = (key) => {
+    const base = todayData || {};
+    if (key === "comm") return base.comm || 0;
+    if (key === "doodle") return 0;
+    if (key === "doj") return base.doj || 0;
+    if (key === "novel") return base.novel || 0;
+    if (key === "dev") return (base.manual || base.dev || 0) + (rmToday.dev || 0);
+    if (key === "etc") return (base.etc || 0) + (rmToday.etc || 0);
+    return 0;
+  };
+
+  // 오늘 총합 = dailyStats.total (원격수동 미포함) + 원격수동기록
+  const todayTotal = (todayData ? (todayData.total || 0) : 0) + (rmToday.dev || 0) + (rmToday.etc || 0);
+
+  // 월간 데이터 집계 (monthlyStats + 원격 수동기록 합산)
+  const monthTotals = {};
+  let monthGrandTotal = 0;
+  let workDays = 0;
+  trackers.forEach(t => { monthTotals[t.key] = 0; });
+  if (monthData) {
+    Object.entries(monthData).forEach(([dateKey, day]) => {
+      if (typeof day === "object" && day.total != null) {
+        const rm = remoteManAll[dateKey] || {};
+        const rmDev = rm.dev || 0, rmEtc = rm.etc || 0;
+        const dayTotal = day.total + rmDev + rmEtc;
+        if (dayTotal > 0) workDays++;
+        monthGrandTotal += dayTotal;
+        trackers.forEach(t => {
+          let v = day[t.key] || 0;
+          if (t.key === "dev") v += rmDev;
+          if (t.key === "etc") v += rmEtc;
+          monthTotals[t.key] += v;
+        });
+      }
+    });
+  }
+  // monthlyStats에 없는 날짜의 원격 수동기록도 포함
+  Object.entries(remoteManAll).forEach(([dateKey, rm]) => {
+    if (dateKey.startsWith(monthKey + "-") && !(monthData && monthData[dateKey])) {
+      const rmDev = rm.dev || 0, rmEtc = rm.etc || 0;
+      const dayTotal = rmDev + rmEtc;
+      if (dayTotal > 0) {
+        workDays++;
+        monthGrandTotal += dayTotal;
+        monthTotals["dev"] += rmDev;
+        monthTotals["etc"] += rmEtc;
+      }
+    }
+  });
+  const maxTracker = Math.max(...trackers.map(t => monthTotals[t.key] || 0), 1);
+
+  const [selDay, setSelDay] = useState(null);
+
+  const [my, mm] = monthKey.split("-").map(Number);
+  const monthLabel = my + "년 " + mm + "월";
+
+  // 달력 셀 생성
+  const buildCells = () => {
+    const first = new Date(my, mm - 1, 1);
+    const lastDay = new Date(my, mm, 0).getDate();
+    const startDow = first.getDay();
+    const cells = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let d = 1; d <= lastDay; d++) {
+      const key = monthKey + "-" + String(d).padStart(2, "0");
+      const base = (monthData && monthData[key]) || {};
+      const rm = remoteManAll[key] || {};
+      const comm = base.comm || 0, doodle = base.doodle || 0, doj = base.doj || 0, novel = base.novel || 0;
+      const dev = (base.dev || 0) + (rm.dev || 0), etc = (base.etc || 0) + (rm.etc || 0);
+      const total = (base.total || 0) + (rm.dev || 0) + (rm.etc || 0);
+      cells.push({ day: d, key, comm, doodle, doj, novel, dev, etc, total });
+    }
+    return cells;
+  };
+  const calCells = !loading ? buildCells() : [];
+  const calMax = Math.max(...calCells.filter(c => c).map(c => c.total), 1);
+  const getLevel = (t) => { if (!t) return 0; const r = t / calMax; if (r < 0.25) return 1; if (r < 0.5) return 2; if (r < 0.75) return 3; return 4; };
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const selectedCell = selDay != null ? calCells.find(c => c && c.day === selDay) : null;
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "60px 20px" }}>
+        <span style={{ color: "#888", fontSize: 14 }}>불러오는 중...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* 오늘 요약 */}
+      <div style={{ background: "linear-gradient(135deg, rgba(184,169,212,0.12), rgba(169,184,212,0.12))", borderRadius: 16, padding: "24px 20px", textAlign: "center" }}>
+        <p style={{ fontSize: 13, color: "#999", marginBottom: 8 }}>오늘의 총 작업시간</p>
+        <p style={{ fontSize: 32, fontWeight: 600, color: "#b8a9d4", marginBottom: 4 }}>{fmtSec(todayTotal)}</p>
+        {todayData && <p style={{ fontSize: 11, color: "#666" }}>마지막 갱신: {new Date(todayData.updatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</p>}
+      </div>
+
+      {/* 오늘 카테고리별 */}
+      {todayTotal > 0 && (
+        <div style={wsStyles.card}>
+          <p style={wsStyles.cardTitle}>오늘 카테고리별</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {trackers.map(t => {
+              const val = getTodayVal(t.key);
+              if (val <= 0) return null;
+              const pct = todayTotal > 0 ? Math.round(val / todayTotal * 100) : 0;
+              const wo = todayData && todayData.workOutput ? todayData.workOutput : {};
+              let outputText = "";
+              if (t.key === "doj") {
+                const parts = [];
+                if (wo.dojConti > 0) parts.push("콘티 " + wo.dojConti + "p");
+                if (wo.dojRough > 0) parts.push("��프 " + wo.dojRough + "p");
+                if (wo.dojArtwork > 0) parts.push("작화 " + wo.dojArtwork + "p");
+                if (wo.dojWritingPages > 0) parts.push("집필 " + wo.dojWritingPages + "p");
+                if (wo.dojWritingChars > 0) parts.push("집필 " + (wo.dojWritingChars >= 10000 ? (wo.dojWritingChars / 10000).toFixed(1) + "만자" : wo.dojWritingChars.toLocaleString() + "자"));
+                outputText = parts.join(", ");
+              } else if (t.key === "novel") {
+                if (wo.novelChars > 0) outputText = wo.novelChars >= 10000 ? (wo.novelChars / 10000).toFixed(1) + "만자" : wo.novelChars.toLocaleString() + "자";
+              }
+              return (
+                <div key={t.key}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 16, width: 24, textAlign: "center" }}>{t.emoji}</span>
+                    <span style={{ fontSize: 13, color: "#ccc", width: 52 }}>{t.label}</span>
+                    <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: pct + "%", height: "100%", background: t.color, borderRadius: 3, transition: "width 0.3s" }} />
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: t.color, minWidth: 60, textAlign: "right" }}>{fmtSec(val)}</span>
+                  </div>
+                  {outputText && <div style={{ marginLeft: 34, marginTop: 3, fontSize: 11, color: "#999" }}>{outputText}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 수동 입력 */}
+      <div style={wsStyles.card}>
+        <p style={wsStyles.cardTitle}>수동 작업시간 입력</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="date" value={manDate} onChange={e => setManDate(e.target.value)} style={wsStyles.formInput} />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setManCat("dev")} style={{ ...wsStyles.catToggle, background: manCat === "dev" ? "#7ca3c4" : "rgba(255,255,255,0.06)", color: manCat === "dev" ? "#fff" : "#aaa" }}>💻 개발</button>
+            <button onClick={() => setManCat("etc")} style={{ ...wsStyles.catToggle, background: manCat === "etc" ? "#b39dcc" : "rgba(255,255,255,0.06)", color: manCat === "etc" ? "#fff" : "#aaa" }}>📌 기타</button>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="number" placeholder="분 단위 입력" value={manMin} onChange={e => setManMin(e.target.value)} onKeyDown={e => e.key === "Enter" && addManual()} style={{ ...wsStyles.formInput, flex: 1 }} />
+            <button onClick={addManual} style={{ ...wsStyles.addManBtn, opacity: manMin && parseInt(manMin) > 0 ? 1 : 0.3 }}>추가</button>
+          </div>
+        </div>
+        {manToast && <p style={{ textAlign: "center", color: "#7cb5a0", fontSize: 13, marginTop: 10, fontWeight: 500 }}>✓ 저장했어요!</p>}
+      </div>
+
+      {/* 월간 통계 */}
+      <div style={wsStyles.card}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <button onClick={prevMonth} style={wsStyles.navBtn}>◀</button>
+          <span style={{ fontSize: 15, fontWeight: 600, color: "#e0e0e0" }}>{monthLabel}</span>
+          <button onClick={nextMonth} style={wsStyles.navBtn}>▶</button>
+        </div>
+
+        {!monthData ? (
+          <p style={{ textAlign: "center", color: "#666", fontSize: 13, padding: "20px 0" }}>이 달의 데이터가 없어요</p>
+        ) : (
+          <>
+            {/* 월간 요약 카드 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
+              <div style={wsStyles.miniCard}>
+                <p style={wsStyles.miniVal}>{fmtSec(monthGrandTotal)}</p>
+                <p style={wsStyles.miniLabel}>총 작업</p>
+              </div>
+              <div style={wsStyles.miniCard}>
+                <p style={wsStyles.miniVal}>{workDays}일</p>
+                <p style={wsStyles.miniLabel}>작업 일수</p>
+              </div>
+              <div style={wsStyles.miniCard}>
+                <p style={wsStyles.miniVal}>{fmtSec(workDays > 0 ? Math.round(monthGrandTotal / workDays) : 0)}</p>
+                <p style={wsStyles.miniLabel}>일 평균</p>
+              </div>
+            </div>
+
+            {/* 월간 카테고리별 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              {trackers.map(t => {
+                const val = monthTotals[t.key] || 0;
+                if (val <= 0) return null;
+                const pct = Math.round(val / maxTracker * 100);
+                return (
+                  <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 16, width: 24, textAlign: "center" }}>{t.emoji}</span>
+                    <span style={{ fontSize: 13, color: "#ccc", width: 52 }}>{t.label}</span>
+                    <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: pct + "%", height: "100%", background: t.color, borderRadius: 3, transition: "width 0.3s" }} />
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: t.color, minWidth: 60, textAlign: "right" }}>{fmtSec(val)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 달력 히트맵 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+              {DOW.map(d => <div key={d} style={{ textAlign: "center", fontSize: 10, color: "#666", padding: "2px 0" }}>{d}</div>)}
+              {calCells.map((c, i) => {
+                if (!c) return <div key={"e" + i} />;
+                const lv = getLevel(c.total);
+                const isToday = c.key === todayKey;
+                const isSel = c.day === selDay;
+                const bg = lv === 0 ? "rgba(255,255,255,0.04)" : lv === 1 ? "rgba(184,169,212,0.2)" : lv === 2 ? "rgba(184,169,212,0.4)" : lv === 3 ? "rgba(184,169,212,0.6)" : "rgba(184,169,212,0.85)";
+                return (
+                  <div key={c.day} onClick={() => setSelDay(isSel ? null : c.day)} style={{
+                    aspectRatio: "1", borderRadius: 4, background: bg, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, color: lv >= 3 ? "#fff" : "#999", cursor: "pointer", position: "relative",
+                    boxShadow: isSel ? "inset 0 0 0 2px #b8a9d4" : isToday ? "inset 0 0 0 1.5px #b8a9d455" : "none",
+                    transition: "all 0.15s",
+                  }}>{c.day}</div>
+                );
+              })}
+            </div>
+
+            {/* 범례 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 6, fontSize: 10, color: "#666" }}>
+              <span>적음</span>
+              {[0,1,2,3,4].map(lv => {
+                const bg = lv === 0 ? "rgba(255,255,255,0.04)" : lv === 1 ? "rgba(184,169,212,0.2)" : lv === 2 ? "rgba(184,169,212,0.4)" : lv === 3 ? "rgba(184,169,212,0.6)" : "rgba(184,169,212,0.85)";
+                return <div key={lv} style={{ width: 12, height: 12, borderRadius: 2, background: bg }} />;
+              })}
+              <span>많음</span>
+            </div>
+
+            {/* 선택한 날짜의 세부 통계 */}
+            {selectedCell && (
+              <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 14, marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{mm}월 {selectedCell.day}일</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#b8a9d4" }}>{fmtSec(selectedCell.total)}</span>
+                </div>
+                {selectedCell.total === 0 ? (
+                  <p style={{ fontSize: 12, color: "#666", textAlign: "center", padding: "8px 0" }}>이 날은 기록이 없어요</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {trackers.map(t => {
+                      const val = selectedCell[t.key] || 0;
+                      if (val <= 0) return null;
+                      return (
+                        <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+                          <span style={{ flex: 1, color: "#bbb" }}>{t.emoji} {t.label}</span>
+                          <span style={{ fontWeight: 600, color: t.color }}>{fmtSec(val)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 새로고침 버튼 */}
+      <button onClick={loadData} style={wsStyles.refreshBtn}>🔄 새로고침</button>
+    </div>
+  );
+}
+
+const wsStyles = {
+  card: { background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "16px 18px" },
+  cardTitle: { fontSize: 14, fontWeight: 600, color: "#e0e0e0", marginBottom: 14 },
+  navBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#aaa", fontSize: 12, padding: "6px 14px", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  miniCard: { background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "12px 8px", textAlign: "center" },
+  miniVal: { fontSize: 16, fontWeight: 600, color: "#b8a9d4", marginBottom: 2 },
+  miniLabel: { fontSize: 11, color: "#888" },
+  refreshBtn: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#aaa", fontSize: 13, padding: "12px 0", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", textAlign: "center" },
+  formInput: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e0e0e0", fontSize: 14, padding: "10px 12px", fontFamily: "'Noto Sans KR', sans-serif", outline: "none", width: "100%" },
+  catToggle: { flex: 1, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", textAlign: "center" },
+  addManBtn: { background: "#7cb5a0", border: "none", borderRadius: 8, color: "#fff", fontSize: 14, fontWeight: 600, padding: "10px 20px", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", flexShrink: 0 },
+};
+
+function AuthGate({children}){
+  const[user,setUser]=useState(null);
+  const[checking,setChecking]=useState(true);
+  const[err,setErr]=useState('');
+  useEffect(()=>{const unsub=fireAuth.onAuthStateChanged(u=>{setUser(u);setChecking(false)});return unsub},[]);
+  const doLogin=()=>{setErr('');fireAuth.signInWithPopup(googleProvider).catch(e=>{console.error('Auth error:',e);setErr(e.code==='auth/operation-not-allowed'?'Firebase 콘솔에서 Google 로그인을 활성화해주세요 (Authentication → Sign-in method → Google → 사용 설정)':e.code==='auth/popup-blocked'?'팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요.':e.message)})};
+  if(checking)return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#1a1a2e',color:'#999',fontFamily:'Noto Sans KR, sans-serif'}}><p>확인 중...</p></div>);
+  if(!user)return(<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,background:'#1a1a2e',fontFamily:'Noto Sans KR, sans-serif'}}>
+    <div style={{fontSize:48,marginBottom:8}}>🔒</div>
+    <p style={{fontSize:15,color:'#999'}}>로그인이 필요합니다</p>
+    <button onClick={doLogin} style={{padding:'10px 28px',fontSize:14,background:'#b8a9d4',color:'#fff',border:'none',borderRadius:8,cursor:'pointer',fontFamily:'inherit'}}>Google 계정으로 로그인</button>
+    {err&&<p style={{fontSize:12,color:'#e06060',maxWidth:400,textAlign:'center',lineHeight:1.5,padding:'0 20px'}}>{err}</p>}
+  </div>);
+  return children;
+}
+function DailyLog() {
+  const today = getToday();
+  const [entries, setEntries] = useState(() => loadEntries(today));
+  const [selectedCat, setSelectedCat] = useState(null);
+  const [memo, setMemo] = useState("");
+  const [view, setView] = useState("log");
+  const [showToast, setShowToast] = useState(false);
+  const [synced, setSynced] = useState(false);
+  const inputRef = useRef(null);
+
+  // 처음 열 때 파이어베이스에서도 불러와서 합치기
+  useEffect(() => {
+    loadEntriesFromFirebase(today).then(remote => {
+      setEntries(prev => {
+        const merged = mergeEntries(prev, remote);
+        saveEntries(today, merged);
+        return merged;
+      });
+      setSynced(true);
+    });
+  }, []);
+
+  // entries가 바뀔 때마다 로컬 + 파이어베이스 저장
+  useEffect(() => {
+    saveEntries(today, entries);
+    if (synced) saveEntriesToFirebase(today, entries);
+  }, [entries, synced]);
+
+  const addEntry = () => {
+    if (!selectedCat || !memo.trim()) return;
+    const newEntry = { id: Date.now(), category: selectedCat, memo: memo.trim(), timestamp: Date.now() };
+    setEntries(prev => [...prev, newEntry]);
+    setMemo("");
+    setSelectedCat(null);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 1800);
+  };
+
+  const removeEntry = (id) => { setEntries(prev => prev.filter(e => e.id !== id)); };
+  const catInfo = (id) => CATEGORIES.find(c => c.id === id);
+
+  const categorySummary = CATEGORIES.map(cat => ({
+    ...cat,
+    items: entries.filter(e => e.category === cat.id),
+  })).filter(c => c.items.length > 0);
+
+  const totalCount = entries.length;
+
+  return (
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.headerTop}>
+          <div>
+            <h1 style={styles.title}>오늘 한 일</h1>
+            <p style={styles.date}>{today.replace(/-/g, ". ")}</p>
+          </div>
+          <button onClick={()=>{if(confirm('로그아웃할까요?'))fireAuth.signOut()}} title="로그아웃" style={{background:'none',border:'none',fontSize:18,cursor:'pointer',padding:4,opacity:0.5}}>🚪</button>
+          {totalCount > 0 && (
+            <div style={styles.badge}>
+              <span style={styles.badgeNum}>{totalCount}</span>
+              <span style={styles.badgeLabel}>건</span>
+            </div>
+          )}
+        </div>
+        <div style={styles.tabs}>
+          <button className="tab-btn" style={{...styles.tab, ...(view === "log" ? styles.tabActive : {})}} onClick={() => setView("log")}>기록하기</button>
+          <button className="tab-btn" style={{...styles.tab, ...(view === "summary" ? styles.tabActive : {})}} onClick={() => setView("summary")}>오늘의 정리</button>
+          <button className="tab-btn" style={{...styles.tab, ...(view === "stats" ? styles.tabActive : {})}} onClick={() => setView("stats")}>작업 통계</button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={styles.content}>
+        {view === "log" ? (
+          <>
+            {/* Category Selector */}
+            <div style={styles.catRow}>
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.id}
+                  className="cat-btn"
+                  onClick={() => { setSelectedCat(cat.id); setTimeout(() => inputRef.current && inputRef.current.focus(), 100); }}
+                  style={{
+                    ...styles.catBtn,
+                    background: selectedCat === cat.id ? cat.color : "rgba(255,255,255,0.06)",
+                    color: selectedCat === cat.id ? "#fff" : "#a0a0a0",
+                    borderColor: selectedCat === cat.id ? cat.color : "rgba(255,255,255,0.1)",
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{cat.emoji}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Input */}
+            <div style={styles.inputRow}>
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={selectedCat ? catInfo(selectedCat).label + " — 뭘 했나요?" : "카테고리를 먼저 선택해주세요"}
+                value={memo}
+                onChange={e => setMemo(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addEntry()}
+                disabled={!selectedCat}
+                style={{
+                  ...styles.input,
+                  borderColor: selectedCat ? catInfo(selectedCat).color + "66" : "rgba(255,255,255,0.08)",
+                }}
+              />
+              <button
+                onClick={addEntry}
+                disabled={!selectedCat || !memo.trim()}
+                style={{
+                  ...styles.addBtn,
+                  opacity: selectedCat && memo.trim() ? 1 : 0.3,
+                  background: selectedCat && memo.trim() ? catInfo(selectedCat).color : "rgba(255,255,255,0.1)",
+                }}
+              >+</button>
+            </div>
+
+            {/* Entry List */}
+            <div style={styles.entryList}>
+              {entries.length === 0 ? (
+                <div style={styles.empty}>
+                  <span style={{ fontSize: 32, marginBottom: 12 }}>🌙</span>
+                  <p style={{ color: "#777", fontSize: 14, lineHeight: 1.6 }}>아직 기록이 없어요<br/>오늘 한 일을 하나씩 적어보세요</p>
+                </div>
+              ) : (
+                [...entries].reverse().map(entry => {
+                  const cat = catInfo(entry.category);
+                  return (
+                    <div key={entry.id} className="entry-item entry-row" style={styles.entry}>
+                      <div style={{ ...styles.entryDot, background: cat.color }} />
+                      <div style={styles.entryContent}>
+                        <div style={styles.entryMeta}>
+                          <span style={{ ...styles.entryTag, color: cat.color, background: cat.color + "18" }}>
+                            {cat.emoji} {cat.label}
+                          </span>
+                          <span style={styles.entryTime}>{formatTime(entry.timestamp)}</span>
+                        </div>
+                        <p style={styles.entryText}>{entry.memo}</p>
+                      </div>
+                      <button className="remove-btn" onClick={() => removeEntry(entry.id)} style={styles.removeBtn} title="삭제">×</button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : view === "summary" ? (
+          /* Summary View */
+          <div style={styles.summaryWrap}>
+            {totalCount === 0 ? (
+              <div style={styles.empty}>
+                <span style={{ fontSize: 32, marginBottom: 12 }}>🌙</span>
+                <p style={{ color: "#777", fontSize: 14 }}>아직 기록된 일이 없어요</p>
+              </div>
+            ) : (
+              <>
+                <div style={styles.encouragement}>
+                  <p style={styles.encourageText}>
+                    {totalCount >= 8 ? "오늘 정말 많이 했어요! 🌟"
+                      : totalCount >= 5 ? "알찬 하루였네요 ✨"
+                      : totalCount >= 3 ? "착실하게 쌓아가고 있어요 💪"
+                      : "한 걸음 한 걸음이 쌓여요 🌱"}
+                  </p>
+                  <p style={styles.encourageSub}>총 {totalCount}건, {categorySummary.length}개 분야에서 작업했어요</p>
+                </div>
+
+                {categorySummary.map((cat, i) => (
+                  <div key={cat.id} className="summary-card" style={{ ...styles.summaryCard, animationDelay: (i * 0.08) + "s", borderLeft: "3px solid " + cat.color }}>
+                    <div style={styles.summaryCardHeader}>
+                      <span style={{ fontSize: 18 }}>{cat.emoji}</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#e0e0e0" }}>{cat.label}</span>
+                      <span style={{ ...styles.summaryCount, background: cat.color + "22", color: cat.color }}>{cat.items.length}건</span>
+                    </div>
+                    <ul style={styles.summaryList}>
+                      {cat.items.map(item => (
+                        <li key={item.id} style={styles.summaryItem}>
+                          <span style={{ color: "#ccc" }}>{item.memo}</span>
+                          <span style={{ color: "#666", fontSize: 12, flexShrink: 0 }}>{formatTime(item.timestamp)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+
+                <div style={styles.closing}>
+                  <p style={styles.closingText}>오늘도 수고 많았어요.<br/>이제 푹 쉬세요 😴</p>
+                </div>
+              </>
+            )}
+          </div>
+        ) : view === "stats" ? (
+          <WorkStatsTab />
+        ) : null}
+      </div>
+
+      {showToast && <div className="toast-msg" style={styles.toast}>✓ 기록했어요!</div>}
+    </div>
+  );
+}
+
+const styles = {
+  container: {
+    fontFamily: "'Noto Sans KR', sans-serif",
+    background: "linear-gradient(170deg, #1a1a2e 0%, #16213e 40%, #1a1a2e 100%)",
+    minHeight: "100vh",
+    color: "#e0e0e0",
+    position: "relative",
+    overflow: "hidden",
+    maxWidth: 580,
+    margin: "0 auto",
+  },
+  header: { padding: "28px 20px 0", background: "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%)" },
+  headerTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
+  title: { fontSize: 24, fontWeight: 600, color: "#f0f0f0", letterSpacing: "-0.5px", marginBottom: 4 },
+  date: { fontSize: 13, color: "#888", fontWeight: 300 },
+  badge: { display: "flex", alignItems: "baseline", gap: 3, background: "rgba(255,255,255,0.06)", borderRadius: 12, padding: "8px 14px" },
+  badgeNum: { fontSize: 22, fontWeight: 600, color: "#b8a9d4" },
+  badgeLabel: { fontSize: 12, color: "#999" },
+  tabs: { display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 3 },
+  tab: { flex: 1, border: "none", background: "transparent", color: "#888", fontSize: 14, fontWeight: 500, padding: "10px 0", borderRadius: 8, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  tabActive: { background: "rgba(255,255,255,0.08)", color: "#e0e0e0" },
+  content: { padding: "20px 20px 40px" },
+  catRow: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 },
+  catBtn: { display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  inputRow: { display: "flex", gap: 8, marginBottom: 24 },
+  input: { flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid", borderRadius: 12, padding: "12px 16px", color: "#e0e0e0", fontSize: 14, fontFamily: "'Noto Sans KR', sans-serif" },
+  addBtn: { width: 46, height: 46, borderRadius: 12, border: "none", color: "#fff", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 300, flexShrink: 0 },
+  entryList: { display: "flex", flexDirection: "column", gap: 8 },
+  empty: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" },
+  entry: { display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, position: "relative" },
+  entryDot: { width: 4, height: 4, borderRadius: "50%", marginTop: 8, flexShrink: 0 },
+  entryContent: { flex: 1, minWidth: 0 },
+  entryMeta: { display: "flex", alignItems: "center", gap: 8, marginBottom: 4 },
+  entryTag: { fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 6 },
+  entryTime: { fontSize: 11, color: "#666" },
+  entryText: { fontSize: 14, color: "#ccc", lineHeight: 1.5 },
+  removeBtn: { position: "absolute", top: 10, right: 10, width: 22, height: 22, border: "none", background: "rgba(255,255,255,0.06)", color: "#888", borderRadius: "50%", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 },
+  summaryWrap: { display: "flex", flexDirection: "column", gap: 16 },
+  encouragement: { textAlign: "center", padding: "24px 16px", background: "linear-gradient(135deg, rgba(232,146,124,0.08), rgba(124,181,160,0.08))", borderRadius: 16, marginBottom: 8 },
+  encourageText: { fontSize: 18, fontWeight: 600, color: "#f0f0f0", marginBottom: 6 },
+  encourageSub: { fontSize: 13, color: "#999" },
+  summaryCard: { background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "16px 18px" },
+  summaryCardHeader: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 },
+  summaryCount: { fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, marginLeft: "auto" },
+  summaryList: { listStyle: "none", display: "flex", flexDirection: "column", gap: 8 },
+  summaryItem: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, fontSize: 14, padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" },
+  closing: { textAlign: "center", padding: "32px 16px 16px" },
+  closingText: { fontSize: 15, color: "#999", lineHeight: 1.8, fontWeight: 300 },
+  toast: { position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", background: "rgba(124,181,160,0.9)", color: "#fff", padding: "10px 20px", borderRadius: 20, fontSize: 14, fontWeight: 500, fontFamily: "'Noto Sans KR', sans-serif", zIndex: 100, backdropFilter: "blur(8px)" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AuthGate><DailyLog /></AuthGate>);
+</script>
+</body>
+</html>
