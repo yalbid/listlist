@@ -597,11 +597,12 @@ function TodayWorkTime({onClick}){
     const update=async()=>{
       try{
         const tk=todayStr();
-        const[commDoc,novelDoc,rmDoc,dojDoc]=await Promise.all([
+        const[commDoc,novelDoc,rmDoc,dojDoc,mlDoc]=await Promise.all([
           fireDb.collection('trackerSync').doc('commission').get(),
           fireDb.collection('trackerSync').doc('novel').get(),
           fireDb.collection('remoteManualLog').doc(tk).get(),
-          fireDb.collection('trackerSync').doc('doujinshi').get()
+          fireDb.collection('trackerSync').doc('doujinshi').get(),
+          fireDb.collection('trackerSync').doc('manualLog').get()
         ]);
         // 커미션 작업시간
         let comm=0,doodle=0;
@@ -612,16 +613,19 @@ function TodayWorkTime({onClick}){
         // 소설 작업시간
         let novel=0,novelChars=0;
         if(novelDoc.exists){const nd=novelDoc.data();const dl=nd.dailyLog||{};novel=dl[tk]||0;const wl=nd.dailyWritingLog||{};novelChars=wl[tk]||0}
-        // 수동 기록
+        // 수동 기록 (daily-log에서 입력한 것)
         let rm=0;
         if(rmDoc.exists){const d=rmDoc.data();rm=(d.dev||0)+(d.etc||0)}
+        // 수동 기록 (행복일력에서 입력한 것)
+        let manual=0;
+        if(mlDoc.exists){const ml=mlDoc.data().data||{};const entry=ml[tk]||{};manual=(entry.dev||0)+(entry.etc||0)}
         // 동인지 작업량(페이지 등)
         let dojOut={dojConti:0,dojRough:0,dojArtwork:0,dojWritingPages:0,dojWritingChars:0};
         if(dojDoc.exists){const wo=dojDoc.data().workOutput||{};const entry=wo[tk]||{};dojOut={dojConti:entry.conti||0,dojRough:entry.rough||0,dojArtwork:entry.artwork||0,dojWritingPages:entry.wPages||0,dojWritingChars:entry.wChars||0}}
 
-        const t=comm+doodle+doj+novel+rm;
+        const t=comm+doodle+doj+novel+rm+manual;
         setTotal(t);
-        syncToFirebase(tk,{comm,doodle,doj,novel,manual:0,total:comm+doodle+doj+novel,updatedAt:Date.now(),
+        syncToFirebase(tk,{comm,doodle,doj,novel,manual,total:comm+doodle+doj+novel+manual,updatedAt:Date.now(),
           workOutput:{...dojOut,novelChars}
         });
       }catch(e){console.warn('TodayWorkTime update failed:',e)}
