@@ -787,3 +787,270 @@ function StatsTab(){
   const saveManualLog=async(log)=>{
     try{await idbPut('meta','manualLog',log)}catch(e){console.error(e)}
     try{fireDb.collection('trackerSync').doc('manualLog').set({data:log,updatedAt:Date.now()},{merge:true})}catch(e){}
+  };
+
+  useEffect(()=>{
+    const loadFromFirebase=async()=>{
+      const comm={},doodle={},doj={},novel={};
+      let ml={},rml={};
+      try{
+        const[commDoc,dojDoc,novelDoc,mlDoc,rmSnap]=await Promise.all([
+          fireDb.collection('trackerSync').doc('commission').get(),
+          fireDb.collection('trackerSync').doc('doujinshi').get(),
+          fireDb.collection('trackerSync').doc('novel').get(),
+          fireDb.collection('trackerSync').doc('manualLog').get(),
+          fireDb.collection('remoteManualLog').get()
+        ]);
+        if(commDoc.exists){const dl=commDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{comm[k]=v.comm||0;doodle[k]=v.doodle||0})}
+        if(dojDoc.exists){const dl=dojDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{doj[k]=v})}
+        if(novelDoc.exists){const dl=novelDoc.data().dailyLog||{};Object.entries(dl).forEach(([k,v])=>{novel[k]=v})}
+        if(mlDoc.exists){ml=mlDoc.data().data||{}}
+        rmSnap.forEach(doc=>{rml[doc.id]=doc.data()});
+      }catch(e){console.warn('Firebase load failed:',e)}
+      setCommLog(comm);setDoodleLog(doodle);setDojLog(doj);setNovelLog(novel);setManualLog(ml);setRemoteManLog(rml);
+    };
+    loadFromFirebase();
+  },[]);
+
+  const addManual=()=>{
+    const mins=parseInt(manMin);if(!mins||mins<=0)return;
+    const key=manDate;const sec=mins*60;
+    const updated={...manualLog};
+    if(!updated[key])updated[key]={dev:0,etc:0};
+    updated[key][manCat]=(updated[key][manCat]||0)+sec;
+    setManualLog(updated);saveManualLog(updated);setManMin('');
+  };
+  const getManualLocal=(key,cat)=>(manualLog[key]&&manualLog[key][cat])||0;
+  const getManualRemote=(key,cat)=>(remoteManLog[key]&&remoteManLog[key][cat])||0;
+  const getManual=(key,cat)=>getManualLocal(key,cat);
+
+  const prevMonth=()=>{setSelDay(null);setMonth(p=>p.m===0?{y:p.y-1,m:11}:{y:p.y,m:p.m-1})};
+  const nextMonth=()=>{setSelDay(null);setMonth(p=>p.m===11?{y:p.y+1,m:0}:{y:p.y,m:p.m+1})};
+  const goToday=()=>{setSelDay(null);const d=new Date();setMonth({y:d.getFullYear(),m:d.getMonth()})};
+
+  const buildCal=()=>{
+    const first=new Date(month.y,month.m,1);
+    const lastDay=new Date(month.y,month.m+1,0).getDate();
+    const startDow=first.getDay();
+    const cells=[];
+    for(let i=0;i<startDow;i++)cells.push(null);
+    for(let d=1;d<=lastDay;d++){
+      const key=`${month.y}-${String(month.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const c=commLog[key]||0,dl=doodleLog[key]||0,dj=dojLog[key]||0,nv=novelLog[key]||0;
+      const dev=getManual(key,'dev'),etc=getManual(key,'etc');
+      cells.push({day:d,key,comm:c,doodle:dl,doj:dj,novel:nv,dev,etc,total:c+dl+dj+nv+dev+etc});
+    }
+    return cells;
+  };
+
+  const cells=buildCal();
+  const now=new Date();const isCurrentMonth=month.y===now.getFullYear()&&month.m===now.getMonth();
+  const monthCells=cells.filter(c=>c!==null);
+  const monthTotal=monthCells.reduce((s,c)=>s+c.total,0);
+  const workDays=monthCells.filter(c=>c.total>0).length;
+  const avgPerWorkDay=workDays>0?Math.round(monthTotal/workDays):0;
+  const maxDay=monthCells.reduce((mx,c)=>c.total>mx.total?c:mx,{total:0});
+
+  const monthComm=monthCells.reduce((s,c)=>s+c.comm,0);
+  const monthDoodle=monthCells.reduce((s,c)=>s+c.doodle,0);
+  const monthDoj=monthCells.reduce((s,c)=>s+c.doj,0);
+  const monthNovel=monthCells.reduce((s,c)=>s+c.novel,0);
+  const monthDev=monthCells.reduce((s,c)=>s+c.dev,0);
+  const monthEtc=monthCells.reduce((s,c)=>s+c.etc,0);
+  const trackerMax=Math.max(monthComm,monthDoodle,monthDoj,monthNovel,monthDev,monthEtc,1);
+
+  useEffect(()=>{
+    if(monthCells.length>0){
+      const ym=`${month.y}-${String(month.m+1).padStart(2,'0')}`;
+      syncMonthToFirebase(ym,cells,remoteManLog);
+    }
+  },[commLog,doodleLog,dojLog,novelLog,manualLog,remoteManLog,month.y,month.m]);
+
+  const maxTotal=Math.max(...monthCells.map(c=>c.total),1);
+  const getLevel=t=>{if(t===0)return 0;const r=t/maxTotal;if(r<0.25)return 1;if(r<0.5)return 2;if(r<0.75)return 3;return 4};
+
+  const DOW=['일','월','화','수','목','금','토'];
+  const MONTH_NAMES=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  return(<div className="stats-container">
+    {/* 수동 입력 */}
+    <div className="stats-section">
+      <div className="stats-section-title">✏️ 기타 작업 기록</div>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <input type="date" value={manDate} onChange={e=>setManDate(e.target.value)} max={todayStr} style={{padding:'6px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontFamily:'inherit',fontSize:13}}/>
+        <select value={manCat} onChange={e=>setManCat(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontFamily:'inherit',fontSize:13}}>
+          <option value="dev">🛠 개발</option>
+          <option value="etc">📦 기타</option>
+        </select>
+        <input type="number" value={manMin} onChange={e=>setManMin(e.target.value)} placeholder="분" min="1" style={{width:70,padding:'6px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontFamily:'inherit',fontSize:13,textAlign:'center'}} onKeyDown={e=>e.key==='Enter'&&addManual()}/>
+        <button onClick={addManual} style={{padding:'6px 14px',border:'1px solid var(--accent)',borderRadius:'var(--radius-sm)',background:'var(--accent)',color:'white',fontFamily:'inherit',fontSize:12,cursor:'pointer'}}>추가</button>
+      </div>
+      {(getManual(manDate,'dev')>0||getManual(manDate,'etc')>0)&&<div style={{marginTop:8,fontSize:12,color:'var(--text-secondary)',display:'flex',gap:12}}>
+        <span style={{color:'var(--text-muted)'}}>{manDate===todayStr?'오늘':manDate.slice(5).replace('-','/')}:</span>
+        {getManual(manDate,'dev')>0&&<span>🛠 개발 {fmtT(getManual(manDate,'dev'))}</span>}
+        {getManual(manDate,'etc')>0&&<span>📦 기타 {fmtT(getManual(manDate,'etc'))}</span>}
+      </div>}
+    </div>
+
+    <div className="stats-summary">
+      <div className="stat-card"><div className="stat-card-value">{fmtT(monthTotal)}</div><div className="stat-card-label">이번 달 총 작업</div></div>
+      <div className="stat-card"><div className="stat-card-value">{workDays}일</div><div className="stat-card-label">작업한 날</div></div>
+      <div className="stat-card"><div className="stat-card-value">{fmtT(avgPerWorkDay)}</div><div className="stat-card-label">작업일 평균</div></div>
+    </div>
+
+    <div className="stats-section">
+      <div className="heatmap-header">
+        <div className="stats-section-title">🗓 작업 히트맵</div>
+        <div className="heatmap-nav">
+          <button onClick={prevMonth}>◀</button>
+          <span className="heatmap-month">{month.y}년 {MONTH_NAMES[month.m]}</span>
+          <button onClick={nextMonth}>▶</button>
+          {!isCurrentMonth&&<button onClick={goToday} style={{fontSize:11}}>오늘</button>}
+        </div>
+      </div>
+      <div className="heatmap-grid">
+        {DOW.map(d=><div key={d} className="heatmap-dow">{d}</div>)}
+        {cells.map((c,i)=>{
+          if(c===null)return <div key={`e${i}`} className="heatmap-cell empty"/>;
+          const lv=getLevel(c.total);
+          const isToday=c.key===todayStr;
+          const isSel=selDay&&selDay.key===c.key;
+          return <div key={c.key} className={`heatmap-cell lv${lv}${isToday?' today-cell':''}${isSel?' selected-cell':''}`}
+            onClick={()=>setSelDay(isSel?null:c)} style={{cursor:'pointer'}}
+            onMouseEnter={()=>setHover(c)} onMouseLeave={()=>setHover(null)}>
+            {hover&&hover.key===c.key&&<div className="heatmap-tooltip">{c.day}일 — {c.total>0?fmtTL(c.total):'작업 없음'}</div>}
+          </div>;
+        })}
+      </div>
+      <div className="heatmap-legend">
+        <span>적음</span>
+        <div className="heatmap-legend-cell lv0"/><div className="heatmap-legend-cell lv1"/><div className="heatmap-legend-cell lv2"/><div className="heatmap-legend-cell lv3"/><div className="heatmap-legend-cell lv4"/>
+        <span>많음</span>
+      </div>
+      {selDay&&<div className="day-detail">
+        <div className="day-detail-header">
+          <span className="day-detail-date">{month.y}년 {month.m+1}월 {selDay.day}일</span>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="day-detail-total">{selDay.total>0?fmtTL(selDay.total):'작업 없음'}</span>
+            <button className="day-detail-close" onClick={()=>setSelDay(null)} title="닫기">✕</button>
+          </div>
+        </div>
+        {selDay.total===0?<div className="day-detail-empty">이 날은 기록된 작업이 없어요</div>:
+        <div className="day-detail-rows">
+          {selDay.comm>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#E8945A'}}/><span className="day-detail-name">커미션</span><span className="day-detail-time">{fmtT(selDay.comm)}</span></div>}
+          {selDay.doodle>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#F4B183'}}/><span className="day-detail-name">일러스트</span><span className="day-detail-time">{fmtT(selDay.doodle)}</span></div>}
+          {selDay.doj>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#B48CDE'}}/><span className="day-detail-name">동인지</span><span className="day-detail-time">{fmtT(selDay.doj)}</span></div>}
+          {selDay.novel>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#5BA87A'}}/><span className="day-detail-name">웹소설</span><span className="day-detail-time">{fmtT(selDay.novel)}</span></div>}
+          {selDay.dev>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#4A90D9'}}/><span className="day-detail-name">개발</span><span className="day-detail-time">{fmtT(selDay.dev)}</span></div>}
+          {selDay.etc>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#999'}}/><span className="day-detail-name">기타</span><span className="day-detail-time">{fmtT(selDay.etc)}</span></div>}
+        </div>}
+      </div>}
+    </div>
+
+    <div className="stats-section">
+      <div className="stats-section-title">📊 이번 달 트래커별 현황</div>
+      <div className="tracker-breakdown">
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#E8945A'}}/><span className="tracker-name">커미션</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthComm/trackerMax*100)}%`,background:'#E8945A'}}/></div><span className="tracker-time">{fmtT(monthComm)}</span></div>
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#F4B183'}}/><span className="tracker-name">일러스트</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDoodle/trackerMax*100)}%`,background:'#F4B183'}}/></div><span className="tracker-time">{fmtT(monthDoodle)}</span></div>
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#B48CDE'}}/><span className="tracker-name">동인지</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDoj/trackerMax*100)}%`,background:'#B48CDE'}}/></div><span className="tracker-time">{fmtT(monthDoj)}</span></div>
+        <div className="tracker-row"><div className="tracker-dot" style={{background:'#5BA87A'}}/><span className="tracker-name">웹소설</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthNovel/trackerMax*100)}%`,background:'#5BA87A'}}/></div><span className="tracker-time">{fmtT(monthNovel)}</span></div>
+        {(monthDev>0||monthEtc>0)&&<div style={{borderTop:'1px solid var(--border-light)',marginTop:4,paddingTop:4}}/>}
+        {monthDev>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#4A90D9'}}/><span className="tracker-name">개발</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDev/trackerMax*100)}%`,background:'#4A90D9'}}/></div><span className="tracker-time">{fmtT(monthDev)}</span></div>}
+        {monthEtc>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#999'}}/><span className="tracker-name">기타</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthEtc/trackerMax*100)}%`,background:'#999'}}/></div><span className="tracker-time">{fmtT(monthEtc)}</span></div>}
+      </div>
+    </div>
+
+    {maxDay.total>0&&<div className="stats-section">
+      <div className="stats-section-title">🏆 이달의 최고 기록</div>
+      <div style={{fontSize:13,color:'var(--text-secondary)'}}>
+        <span style={{fontWeight:600,color:'var(--accent)'}}>{maxDay.day}일</span>에 <span style={{fontWeight:600,color:'var(--accent)'}}>{fmtTL(maxDay.total)}</span> 작업했어요!
+      </div>
+    </div>}
+  </div>);
+}
+
+function PopupTab({data,save,iC}){
+  const[newText,setNewText]=useState(''),[newCharId,setNewCharId]=useState(''),[newMood,setNewMood]=useState('both');
+  const[editId,setEditId]=useState(null),[editText,setEditText]=useState(''),[editCharId,setEditCharId]=useState(''),[editMood,setEditMood]=useState('both');
+  const addLine=()=>{const t=newText.trim();if(!t)return;save({...data,popupLines:[...data.popupLines,{id:gid(),text:t,characterId:newCharId||null,mood:newMood}]});setNewText('');setNewCharId('');setNewMood('both')};
+  const delLine=id=>save({...data,popupLines:data.popupLines.filter(l=>l.id!==id)});
+  const startEdit=l=>{setEditId(l.id);setEditText(l.text);setEditCharId(l.characterId||'');setEditMood(l.mood||'both')};
+  const saveEdit=()=>{if(!editText.trim())return;save({...data,popupLines:data.popupLines.map(l=>l.id===editId?{...l,text:editText.trim(),characterId:editCharId||null,mood:editMood}:l)});setEditId(null)};
+  const toggleEnabled=()=>save({...data,settings:{...data.settings,popupEnabled:!data.settings.popupEnabled}});
+  const getCharName=id=>{const c=data.characters.find(x=>x.id===id);return c?c.name:null};
+  const MOOD_LABEL={work:'🔥 작업',rest:'☕ 휴식',both:'✨ 공용'};
+  const curStatus=data.settings.myStatus||'off';
+  const[notifPerm,setNotifPerm]=useState(typeof Notification!=='undefined'?Notification.permission:'denied');
+  const requestNotif=async()=>{if(typeof Notification==='undefined')return;const p=await Notification.requestPermission();setNotifPerm(p)};
+
+  return(<div className="popup-container">
+    <div className="popup-toggle-row">
+      <div><div className="popup-toggle-label">팝업 알림</div><div className="popup-toggle-sub">좌하단 상태 버튼으로 작업/휴식 전환 → 20~40분마다 캐릭터가 말을 걸어요</div></div>
+      <label className="toggle-switch"><input type="checkbox" checked={data.settings.popupEnabled} onChange={toggleEnabled}/><div className="toggle-track"/><div className="toggle-knob"/></label>
+    </div>
+    {notifPerm!=='granted'&&<div className="popup-toggle-row" style={{marginBottom:12}}>
+      <div><div className="popup-toggle-label">OS 알림</div><div className="popup-toggle-sub">탭을 보고 있지 않을 때 바탕화면에 알림을 띄워줍니다</div></div>
+      <button className="add-btn" onClick={requestNotif} style={{flexShrink:0}}>허용하기</button>
+    </div>}
+    {notifPerm==='granted'&&<div style={{fontSize:11,color:'var(--success)',marginBottom:12}}>OS 알림이 활성화되어 있습니다</div>}
+    <div style={{display:'flex',gap:8,marginBottom:16,alignItems:'center'}}>
+      <button className="add-btn" style={{background:'var(--success)'}} onClick={()=>window.dispatchEvent(new Event('test-popup'))}>🔔 테스트 팝업</button>
+      <span style={{fontSize:12,color:'var(--text-muted)'}}>현재 상태: {STATUS_META[curStatus].emoji} {STATUS_META[curStatus].label}</span>
+    </div>
+    <div className="manage-section">
+      <div className="section-header"><span className="section-title">대사 목록</span><span className="count-badge">{data.popupLines.length}개</span></div>
+      <div className="popup-stats"><span>등록된 캐릭터: {data.characters.length}명</span><span>상태: {data.settings.popupEnabled?'✅ 활성':'⏸ 비활성'}</span></div>
+      {!data.popupLines.length&&<div className="empty-state" style={{padding:'24px 16px'}}><div className="empty-state-icon" style={{fontSize:32}}>💬</div><div className="empty-state-title" style={{fontSize:15}}>대사가 없어요</div><div className="empty-state-desc">캐릭터가 말할 대사를 추가해보세요!</div></div>}
+      {data.popupLines.map(l=><div key={l.id} className="popup-line-card">
+        {editId===l.id?<div style={{flex:1,display:'flex',flexDirection:'column',gap:6}}>
+          <textarea className="form-textarea" style={{minHeight:36,fontSize:13}} value={editText} onChange={e=>setEditText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();saveEdit()}}}/>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+            <select className="form-select" style={{flex:1,padding:'5px 8px',fontSize:12,minWidth:100}} value={editCharId} onChange={e=>setEditCharId(e.target.value)}><option value="">🎲 랜덤 캐릭터</option>{data.characters.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+            <select className="form-select" style={{width:100,padding:'5px 8px',fontSize:12}} value={editMood} onChange={e=>setEditMood(e.target.value)}><option value="both">✨ 공용</option><option value="work">🔥 작업</option><option value="rest">☕ 휴식</option></select>
+            <button className="item-action-btn" onClick={saveEdit}>✅</button><button className="item-action-btn" onClick={()=>setEditId(null)}>✕</button>
+          </div></div>:<>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:2}}>
+              {l.characterId&&getCharName(l.characterId)?<span style={{fontSize:10,fontWeight:600,color:'var(--accent)'}}>{getCharName(l.characterId)}</span>:<span style={{fontSize:10,color:'var(--text-muted)'}}>🎲 랜덤</span>}
+              <span className={`popup-mood-chip ${l.mood||'both'}`}>{MOOD_LABEL[l.mood||'both']}</span>
+            </div>
+            <div className="popup-line-text">{l.text}</div>
+          </div>
+          <div className="item-actions"><button className="item-action-btn" onClick={()=>startEdit(l)}>✏️</button><button className="item-action-btn danger" onClick={()=>delLine(l.id)}>🗑</button></div>
+        </>}
+      </div>)}
+      <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:6}}>
+        <div style={{display:'flex',gap:8}}>
+          <textarea style={{flex:1,padding:'10px 14px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--bg-input)',color:'var(--text-primary)',fontSize:13,resize:'none',minHeight:42,outline:'none',fontFamily:'var(--font-body)',lineHeight:1.5}} value={newText} onChange={e=>setNewText(e.target.value)} placeholder="새 대사를 입력해주세요..." onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addLine()}}}/>
+          <button className="add-btn" style={{alignSelf:'flex-end'}} onClick={addLine}>추가</button>
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <select className="form-select" style={{flex:1,padding:'6px 10px',fontSize:12}} value={newCharId} onChange={e=>setNewCharId(e.target.value)}><option value="">🎲 랜덤 캐릭터가 말해요</option>{data.characters.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <select className="form-select" style={{width:100,padding:'6px 10px',fontSize:12}} value={newMood} onChange={e=>setNewMood(e.target.value)}><option value="both">✨ 공용</option><option value="work">🔥 작업</option><option value="rest">☕ 휴식</option></select>
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+
+function AuthGate({children}){
+  const[user,setUser]=useState(null);
+  const[checking,setChecking]=useState(true);
+  const[err,setErr]=useState('');
+  useEffect(()=>{const unsub=fireAuth.onAuthStateChanged(u=>{setUser(u);setChecking(false)});return unsub},[]);
+  const doLogin=()=>{setErr('');fireAuth.signInWithPopup(googleProvider).catch(e=>{console.error('Auth error:',e);setErr(e.code==='auth/operation-not-allowed'?'Firebase 콘솔에서 Google 로그인을 활성화해주세요':'팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요.')})};
+  if(checking)return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg-primary)',color:'var(--text-muted)',fontFamily:'var(--font-body)'}}><p>확인 중...</p></div>);
+  if(!user)return(<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,background:'var(--bg-primary)',fontFamily:'var(--font-body)'}}>
+    <div style={{fontSize:48,marginBottom:8}}>📖</div>
+    <p style={{fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>캐릭터 행복 일력</p>
+    <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:8}}>Google 계정으로 로그인해주세요</p>
+    <button onClick={doLogin} style={{padding:'12px 32px',background:'var(--accent)',color:'#fff',border:'none',borderRadius:12,fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'var(--font-body)'}}>Google 로그인</button>
+    {err&&<p style={{color:'var(--danger)',fontSize:12,maxWidth:300,textAlign:'center'}}>{err}</p>}
+  </div>);
+  return children;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AuthGate><App/></AuthGate>);
+</script>
+</body>
+</html>
