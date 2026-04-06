@@ -132,7 +132,6 @@
     white-space: nowrap;
     letter-spacing: -0.2px;
     cursor: pointer;
-    position: relative;
   }
   .manual-add-popup {
     position: absolute; top: calc(100% + 6px); right: 0; background: var(--bg-card, var(--bg)); border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; gap: 6px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 100; white-space: nowrap;
@@ -917,7 +916,7 @@
     </div>
   </div>
   <div class="header-actions">
-    <div class="today-time" id="todayTime" title="클릭하여 수동 추가" onclick="toggleManualAdd(event)">⏱ 0m<div class="manual-add-popup" id="manualAddPopup" style="display:none" onclick="event.stopPropagation()"><input type="number" id="manualMin" placeholder="분" onkeydown="if(event.key==='Enter')addManualTime()"><button onclick="addManualTime()">추가</button></div></div>
+    <div style="position:relative"><div class="today-time" id="todayTime" title="클릭하여 수동 추가" onclick="toggleManualAdd()"><span id="todayTimeText">⏱ 0m</span></div><div class="manual-add-popup" id="manualAddPopup" style="display:none" onclick="event.stopPropagation()"><input type="number" id="manualMin" placeholder="분" onkeydown="if(event.key==='Enter')addManualTime()"><button onclick="addManualTime()">추가</button></div></div>
     <button class="btn" id="themeToggle" onclick="toggleTheme()" title="테마 전환">🌙</button>
     <button class="btn" onclick="exportData()">📁 내보내기</button>
     <button class="btn" onclick="document.getElementById('importFile').click()">📂 불러오기</button>
@@ -1217,12 +1216,12 @@ function getTodayTotal() {
 }
 
 function updateTodayDisplay() {
-  const el = document.getElementById('todayTime');
+  const el = document.getElementById('todayTimeText');
   if (!el) return;
   const total = getTodayTotal();
   const hasActive = Object.keys(activeTimers).length > 0;
   el.textContent = `⏱ 오늘 ${fmtTimeShort(total)}`;
-  el.classList.toggle('recording', hasActive);
+  document.getElementById('todayTime').classList.toggle('recording', hasActive);
 }
 
 function notify(msg) {
