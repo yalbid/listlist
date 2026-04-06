@@ -78,13 +78,13 @@ function getLogDate() {
   return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
 }
 
-function weekNumInMonth(monDate, year, month) {
-  // month는 0부터 시작. 해당 월 1일이 포함된 주의 월요일부터 세기
+function weekNumFromFirst(year, month) {
+  // month는 0부터 시작. 해당 월 1일이 포함된 주의 월요일을 반환
   const firstOfMonth = new Date(year, month, 1);
   const firstDow = firstOfMonth.getDay();
   const firstWeekMon = new Date(firstOfMonth);
   firstWeekMon.setDate(1 - ((firstDow + 6) % 7));
-  return Math.round((monDate - firstWeekMon) / (7 * 86400000)) + 1;
+  return firstWeekMon;
 }
 
 function getWeekRange(y, m, d) {
@@ -100,12 +100,14 @@ function getWeekRange(y, m, d) {
 
   let label;
   if (monM === sunM && monY === sunY) {
-    // 한 달 안에 있는 주
-    const wn = weekNumInMonth(mon, monY, monM);
+    // 한 달 안에 있는 주 → 그 달 1일이 포함된 주부터 세기
+    const base = weekNumFromFirst(monY, monM);
+    const wn = Math.round((mon - base) / (7 * 86400000)) + 1;
     label = monY + "년 " + (monM + 1) + "월 " + wn + "주차";
   } else {
     // 두 달에 걸친 주 → 병기
-    const wnOld = weekNumInMonth(mon, monY, monM);
+    // 이전 달: 단순히 월요일 날짜 기준
+    const wnOld = Math.ceil(mon.getDate() / 7);
     if (monY === sunY) {
       label = monY + "년 " + (monM + 1) + "월 " + wnOld + "주차 / " + (sunM + 1) + "월 1주차";
     } else {
@@ -259,6 +261,11 @@ function DonelistViewer() {
 
   // 페이징
   const [page, setPage] = useState(1);
+
+  // 페이지 변경 시 맨 위로 스크롤
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [page]);
 
   // 접기/펼치기 (날짜별)
   const [collapsed, setCollapsed] = useState({});
