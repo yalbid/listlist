@@ -129,6 +129,7 @@ function WorkStatsTab() {
   const [manCat, setManCat] = useState("dev");
   const [manDate, setManDate] = useState(getToday);
   const [manToast, setManToast] = useState(false);
+  const [catColor, setCatColor] = useState(false);
 
   const fmtSec = (s) => {
     if (!s || s < 60) return "0분";
@@ -292,6 +293,12 @@ function WorkStatsTab() {
   const calCells = !loading ? buildCells() : [];
   const calMax = Math.max(...calCells.filter(c => c).map(c => c.total), 1);
   const getLevel = (t) => { if (!t) return 0; const r = t / calMax; if (r < 0.25) return 1; if (r < 0.5) return 2; if (r < 0.75) return 3; return 4; };
+  const getDomColor = (c) => {
+    if (!c || c.total <= 0) return null;
+    let max = 0, color = "#b8a9d4";
+    trackers.forEach(t => { if ((c[t.key] || 0) > max) { max = c[t.key]; color = t.color; } });
+    return color;
+  };
   const DOW = ["일", "월", "화", "수", "목", "금", "토"];
   const selectedCell = selDay != null ? calCells.find(c => c && c.day === selDay) : null;
 
@@ -420,6 +427,9 @@ function WorkStatsTab() {
             </div>
 
             {/* 달력 히트맵 */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+              <button onClick={() => setCatColor(!catColor)} style={{ background: catColor ? "rgba(184,169,212,0.15)" : "rgba(255,255,255,0.06)", border: "1px solid " + (catColor ? "#b8a9d455" : "rgba(255,255,255,0.1)"), borderRadius: 6, padding: "3px 10px", fontSize: 11, color: catColor ? "#b8a9d4" : "#888", cursor: "pointer", fontFamily: "inherit" }}>🎨 카테고리별</button>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
               {DOW.map(d => <div key={d} style={{ textAlign: "center", fontSize: 10, color: "#666", padding: "2px 0" }}>{d}</div>)}
               {calCells.map((c, i) => {
@@ -427,7 +437,8 @@ function WorkStatsTab() {
                 const lv = getLevel(c.total);
                 const isToday = c.key === todayKey;
                 const isSel = c.day === selDay;
-                const bg = lv === 0 ? "rgba(255,255,255,0.04)" : lv === 1 ? "rgba(184,169,212,0.2)" : lv === 2 ? "rgba(184,169,212,0.4)" : lv === 3 ? "rgba(184,169,212,0.6)" : "rgba(184,169,212,0.85)";
+                const domC = catColor ? getDomColor(c) : null;
+                const bg = lv === 0 ? "rgba(255,255,255,0.04)" : domC ? (domC + (lv === 1 ? "33" : lv === 2 ? "66" : lv === 3 ? "99" : "dd")) : lv === 1 ? "rgba(184,169,212,0.2)" : lv === 2 ? "rgba(184,169,212,0.4)" : lv === 3 ? "rgba(184,169,212,0.6)" : "rgba(184,169,212,0.85)";
                 return (
                   <div key={c.day} onClick={() => setSelDay(isSel ? null : c.day)} style={{
                     aspectRatio: "1", borderRadius: 4, background: bg, display: "flex", alignItems: "center", justifyContent: "center",
