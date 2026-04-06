@@ -574,10 +574,9 @@ function DailyLog() {
       <div style={styles.header}>
         <div style={styles.headerTop}>
           <div>
-            <h1 style={styles.title}>오늘 한 일</h1>
+            <h1 style={{...styles.title, cursor:'pointer'}} onClick={()=>{if(confirm('로그아웃할까요?'))fireAuth.signOut()}} title="로그아웃">오늘 한 일</h1>
             <p style={styles.date}>{today.replace(/-/g, ". ")}</p>
           </div>
-          <button onClick={()=>{if(confirm('로그아웃할까요?'))fireAuth.signOut()}} title="로그아웃" style={{background:'none',border:'none',fontSize:18,cursor:'pointer',padding:4,opacity:0.5}}>🚪</button>
           {totalCount > 0 && (
             <div style={styles.badge}>
               <span style={styles.badgeNum}>{totalCount}</span>
