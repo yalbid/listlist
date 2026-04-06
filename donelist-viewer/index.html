@@ -63,7 +63,8 @@ const CATEGORIES = [
   { id: "etc", label: "기타", emoji: "\u{1F4CC}", color: "#b39dcc" },
 ];
 const catMap = {};
-CATEGORIES.forEach(c => { catMap[c.id] = c; });
+const catOrder = {};
+CATEGORIES.forEach((c, i) => { catMap[c.id] = c; catOrder[c.id] = i; });
 
 const ITEMS_PER_PAGE = 50;
 
@@ -273,7 +274,12 @@ function DonelistViewer() {
         ? items
         : items.filter(item => item.category === catFilter);
       if (filtered.length > 0) {
-        const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+        // 카테고리 순서 → 같은 카테고리 안에서 시간순
+        const sorted = [...filtered].sort((a, b) => {
+          const catDiff = (catOrder[a.category] ?? 99) - (catOrder[b.category] ?? 99);
+          if (catDiff !== 0) return catDiff;
+          return a.timestamp - b.timestamp;
+        });
         groups.push({ dateKey, items: sorted });
         total += sorted.length;
         sorted.forEach(item => allItems.push({ ...item, dateKey }));
@@ -466,26 +472,38 @@ function DonelistViewer() {
                       <span style={S.dateCount}>{group.items.length}건</span>
                     </div>
 
-                    {/* 항목 리스트 */}
+                    {/* 항목 리스트 - 카테고리별 그룹 */}
                     {!isCollapsed && (
                       <div style={S.itemList}>
-                        {group.items.map(item => {
-                          const c = catMap[item.category] || { emoji: "?", label: "?", color: "#888" };
-                          return (
-                            <div key={item.id || item.timestamp} style={S.entry}>
-                              <div style={{ ...S.entryDot, background: c.color }} />
-                              <div style={S.entryContent}>
-                                <div style={S.entryMeta}>
-                                  <span style={{ ...S.entryTag, color: c.color, background: c.color + "18" }}>
-                                    {c.emoji} {c.label}
-                                  </span>
-                                  <span style={S.entryTime}>{formatTime(item.timestamp)}</span>
+                        {(() => {
+                          const catGroups = [];
+                          let currentCat = null;
+                          group.items.forEach(item => {
+                            if (item.category !== currentCat) {
+                              currentCat = item.category;
+                              catGroups.push({ cat: item.category, items: [] });
+                            }
+                            catGroups[catGroups.length - 1].items.push(item);
+                          });
+                          return catGroups.map(cg => {
+                            const c = catMap[cg.cat] || { emoji: "?", label: "?", color: "#888" };
+                            return (
+                              <div key={cg.cat} style={{ borderLeft: "3px solid " + c.color, margin: "6px 12px", borderRadius: 4 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px" }}>
+                                  <span style={{ fontSize: 16 }}>{c.emoji}</span>
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{c.label}</span>
+                                  <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: c.color + "22", color: c.color, marginLeft: "auto" }}>{cg.items.length}건</span>
                                 </div>
-                                <p style={S.entryText}>{item.memo}</p>
+                                {cg.items.map(item => (
+                                  <div key={item.id || item.timestamp} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 14px 6px 28px", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                                    <span style={{ flex: 1, fontSize: 14, color: "#ccc", lineHeight: 1.5 }}>{item.memo}</span>
+                                    <span style={{ fontSize: 11, color: "#666", flexShrink: 0 }}>{formatTime(item.timestamp)}</span>
+                                  </div>
+                                ))}
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </div>
