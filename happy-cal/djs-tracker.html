@@ -1786,9 +1786,10 @@ function renderDeadlineBadges(p) {
   const badges = items.filter(it => p.deadlines[it.key]).map(it => {
     const d = new Date(p.deadlines[it.key]); d.setHours(0,0,0,0);
     const diff = Math.ceil((d - now) / 86400000);
-    const tag = diff < 0 ? `D+${Math.abs(diff)}` : diff === 0 ? '오늘' : `D-${diff}`;
+    if (diff < 0) return null;
+    const tag = diff === 0 ? '오늘' : `D-${diff}`;
     return `<span class="dl-badge ${it.cls}">${it.label} ${tag}</span>`;
-  });
+  }).filter(Boolean);
   return badges.length ? `<div class="deadline-badges">${badges.join('')}</div>` : '';
 }
 
