@@ -63,7 +63,7 @@
 </div></div>
 </div><!-- /appWrap -->
 <script>
-const DB_NAME="timeline-db",DB_VER=1,SK="posts",AK="avatar",TICK=4000,LR=.15,RR=.05,ER=.12,ML=2000,MR=2000,ME=6;
+const DB_NAME="timeline-db",DB_VER=1,SK="posts",AK="avatar",TICK=4000,LR=.15,RR=.05,ER=.12,ML=5000,MR=2000,ME=6;
 const DEF_EMOJIS=["😍","🔥","💯","✨","👏","💕","🥹","😭","💖","🫶","👀","⭐"];
 let REMOJIS=[...DEF_EMOJIS];
 const UN=["달빛사냥꾼","고양이집사","새벽감성","별헤는밤","구름위산책","햇살한모금","꿈꾸는붓","잉크요정","종이비행기","무지개다리","바람의노래","숲속여우","하늘연필","보름달떡","파도소리","벚꽃길","수채화하늘","밤하늘별","따뜻한차","마음정원"];
@@ -187,7 +187,7 @@ async function initApp(){
   const savedTick=await dbGet("lastTick");
   if(savedTick&&posts.length){const sec=(Date.now()-savedTick)/1000;if(sec>8&&bulkCatchUp(sec)){console.log("⏩ "+Math.floor(sec/60)+"분 경과분 반영 완료")}}
   /* 포스트 나이 기반 최소 기대값 보장 */
-  posts.forEach(p=>{if(!p.reactions)p.reactions={};const ageH=(Date.now()-p.createdAt)/3600000;const expLikes=Math.floor(ageH*18*(0.85+Math.random()*0.3));const expRT=Math.floor(ageH*4*(0.85+Math.random()*0.3));if(p.likes<expLikes)p.likes=expLikes;if(p.retweets<expRT)p.retweets=expRT;const expE=Math.min(ME,Math.floor(ageH/2)+1);const rk=Object.keys(p.reactions);if(rk.length<expE){const av=REMOJIS.filter(e=>!rk.includes(e)).sort(()=>Math.random()-.5).slice(0,expE-rk.length);av.forEach(e=>{p.reactions[e]=Math.max(1,Math.floor(ageH*2*(0.7+Math.random()*0.6)))})}Object.keys(p.reactions).forEach(e=>{const expR=Math.floor(ageH*2*(0.7+Math.random()*0.6));if(p.reactions[e]<expR)p.reactions[e]=Math.min(500,expR)})});
+  posts.forEach(p=>{if(!p.reactions)p.reactions={};const ageH=(Date.now()-p.createdAt)/3600000;const expLikes=Math.min(ML,Math.floor(ageH*18*(0.85+Math.random()*0.3)));const expRT=Math.min(MR,Math.floor(ageH*4*(0.85+Math.random()*0.3)));if(p.likes<expLikes)p.likes=expLikes;if(p.likes>ML)p.likes=ML;if(p.retweets<expRT)p.retweets=expRT;if(p.retweets>MR)p.retweets=MR;const expE=Math.min(ME,Math.floor(ageH/2)+1);const rk=Object.keys(p.reactions);if(rk.length<expE){const av=REMOJIS.filter(e=>!rk.includes(e)).sort(()=>Math.random()-.5).slice(0,expE-rk.length);av.forEach(e=>{p.reactions[e]=Math.max(1,Math.floor(ageH*2*(0.7+Math.random()*0.6)))})}Object.keys(p.reactions).forEach(e=>{const expR=Math.floor(ageH*2*(0.7+Math.random()*0.6));if(p.reactions[e]<expR)p.reactions[e]=Math.min(500,expR)})});
   sv();
   lastTick=Date.now();
   updCAv();render();
