@@ -216,13 +216,13 @@ function WorkStatsTab() {
     if (key === "doj") return base.doj || 0;
     if (key === "novel") return base.novel || 0;
     if (key === "dev") return (base.dev || 0);
-    if (key === "dojin") return (base.dojin || 0);
+    if (key === "dojin") return (rmToday.dojin || 0);
     if (key === "etc") return (base.etc || 0);
     return 0;
   };
 
   // 오늘 총합 = dailyStats.total (원격수동 미포함) + 원격수동기록
-  const todayTotal = (todayData ? (todayData.total || 0) : 0);
+  const todayTotal = (todayData ? (todayData.total || 0) : 0) + (rmToday.dojin || 0);
 
   // 월간 데이터 집계 (monthlyStats + 원격 수동기록 합산)
   const monthTotals = {};
@@ -233,14 +233,14 @@ function WorkStatsTab() {
     Object.entries(monthData).forEach(([dateKey, day]) => {
       if (typeof day === "object" && day.total != null) {
         const rm = remoteManAll[dateKey] || {};
-        const rmDev = rm.dev || 0, rmEtc = rm.etc || 0;
-        const dayTotal = day.total;
+        const rmDojin = rm.dojin || 0;
+        const dayTotal = day.total + rmDojin;
         if (dayTotal > 0) workDays++;
         monthGrandTotal += dayTotal;
         trackers.forEach(t => {
           let v = day[t.key] || 0;
           if (t.key === "dev") v = (day.dev || 0);
-          if (t.key === "dojin") v = (day.dojin || 0);
+          if (t.key === "dojin") v = rmDojin;
           if (t.key === "etc") v = (day.etc || 0);
           monthTotals[t.key] += v;
         });
@@ -282,9 +282,9 @@ function WorkStatsTab() {
       const hasBase = typeof base === "object" && base.total != null;
       const comm = base.comm || 0, doodle = base.doodle || 0, doj = base.doj || 0, novel = base.novel || 0;
       const dev = hasBase ? (base.dev || 0) : (rm.dev || 0);
-      const dojin = hasBase ? (base.dojin || 0) : (rm.dojin || 0);
+      const dojin = rm.dojin || 0;
       const etc = hasBase ? (base.etc || 0) : (rm.etc || 0);
-      const total = hasBase ? (base.total || 0) : ((rm.dev || 0) + (rm.dojin || 0) + (rm.etc || 0));
+      const total = (hasBase ? (base.total || 0) : ((rm.dev || 0) + (rm.etc || 0))) + (rm.dojin || 0);
       cells.push({ day: d, key, comm, doodle, doj, novel, dev, dojin, etc, total });
     }
     return cells;
