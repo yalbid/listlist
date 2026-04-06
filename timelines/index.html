@@ -76,7 +76,7 @@ function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open(DB_NAM
 function dbGet(key){return new Promise((res,rej)=>{const tx=db.transaction("kv","readonly");const st=tx.objectStore("kv");const r=st.get(key);r.onsuccess=()=>res(r.result!==undefined?r.result:null);r.onerror=()=>res(null)})}
 function dbSet(key,val){return new Promise((res,rej)=>{const tx=db.transaction("kv","readwrite");const st=tx.objectStore("kv");st.put(val,key);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 let posts=[],avSrc=null,pend=[],shArc=false,arcM=null,arcT=null,lbI=null,lbX=0,shMenu=false,lastTick=Date.now();
-function sv(){dbSet(SK,posts)}
+function sv(){dbSet(SK,posts);dbSet("lastTick",Date.now())}
 function svAv(){dbSet(AK,avSrc);fbSaveAv(avSrc)}
 function ta(ts){const s=Math.floor((Date.now()-ts)/1e3);if(s<60)return"방금 전";const m=Math.floor(s/60);if(m<60)return m+"분 전";const h=Math.floor(m/60);if(h<24)return h+"시간 전";return Math.floor(h/24)+"일 전"}
 function pk(a){return a[Math.floor(Math.random()*a.length)]}function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
@@ -88,7 +88,8 @@ function avH(sz=40){return avSrc?`<div class="av" style="width:${sz}px;height:${
 function updCAv(){const el=document.getElementById("cAv"),d=document.getElementById("avDef");if(avSrc){if(!el.querySelector("img")){const i=document.createElement("img");i.src=avSrc;el.insertBefore(i,d)}else el.querySelector("img").src=avSrc;d.style.display="none"}}
 document.getElementById("avIn").addEventListener("change",e=>{const f=e.target.files[0];if(!f||!f.type.startsWith("image/"))return;const r=new FileReader;r.onload=ev=>{const i=new Image;i.onload=()=>{const c=document.createElement("canvas");c.width=128;c.height=128;const ctx=c.getContext("2d"),s=Math.min(i.width,i.height);ctx.drawImage(i,(i.width-s)/2,(i.height-s)/2,s,s,0,0,128,128);avSrc=c.toDataURL("image/jpeg",.8);svAv();updCAv();render();toast("프로필 사진 변경 완료! ✨")};i.src=ev.target.result};r.readAsDataURL(f);e.target.value=""});
 function simReact(ticks){let ch=false;posts.forEach(p=>{if(!p.reactions)p.reactions={};for(let i=0;i<ticks;i++){const age=(Date.now()-p.createdAt)/1e3,rate=Math.max(.15,1-age/7200);if(Math.random()<rate*LR&&p.likes<ML){p.likes=Math.min(ML,p.likes+Math.ceil(Math.random()*3));ch=true}if(Math.random()<rate*RR&&p.retweets<MR){p.retweets=Math.min(MR,p.retweets+1);ch=true}const rk=Object.keys(p.reactions);if(Math.random()<rate*ER&&rk.length<ME){const avail=REMOJIS.filter(e=>!rk.includes(e));if(avail.length){const e=pk(avail);p.reactions[e]=Math.ceil(Math.random()*3);ch=true}}rk.forEach(e=>{if(Math.random()<rate*ER*.5){p.reactions[e]=Math.min(999,p.reactions[e]+Math.ceil(Math.random()*2));ch=true}})}});return ch}
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&posts.length){const missed=Math.min(Math.floor((Date.now()-lastTick)/TICK),500);if(missed>1&&simReact(missed)){sv();render()}lastTick=Date.now()}});
+function bulkCatchUp(sec){let ch=false;const ticks=sec/(TICK/1000);posts.forEach(p=>{if(!p.reactions)p.reactions={};const age=(Date.now()-p.createdAt)/1e3,rate=Math.max(.15,1-age/7200);const addL=Math.floor(ticks*rate*LR*2*(0.8+Math.random()*0.4));if(addL>0&&p.likes<ML){p.likes=Math.min(ML,p.likes+addL);ch=true}const addR=Math.floor(ticks*rate*RR*(0.8+Math.random()*0.4));if(addR>0&&p.retweets<MR){p.retweets=Math.min(MR,p.retweets+addR);ch=true}const rk=Object.keys(p.reactions);const newE=Math.min(ME-rk.length,Math.max(0,Math.floor(ticks*rate*ER/8)));if(newE>0){const av=REMOJIS.filter(e=>!rk.includes(e)).sort(()=>Math.random()-.5).slice(0,newE);av.forEach(e=>{p.reactions[e]=Math.ceil(Math.random()*5);ch=true})}Object.keys(p.reactions).forEach(e=>{const inc=Math.floor(ticks*rate*ER*0.3*(0.8+Math.random()*0.4));if(inc>0){p.reactions[e]=Math.min(999,p.reactions[e]+inc);ch=true}})});return ch}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&posts.length){const sec=(Date.now()-lastTick)/1000;if(sec>8){if(bulkCatchUp(sec)){sv();render()}}lastTick=Date.now()}});
 function gridH(imgs){if(!imgs||!imgs.length)return"";const n=Math.min(imgs.length,4);return`<div class="ig g${n}">${imgs.slice(0,4).map((s,i)=>`<img class="gi${i}" src="${s}" onclick="openLB(${JSON.stringify(imgs).replace(/"/g,'&quot;')},${i})">`).join("")}</div>`}
 function tagH(tags){if(!tags||!tags.length)return"";return`<div style="margin-top:8px">${tags.map(t=>`<button class="tp${arcT===t?" on":""}" onclick="event.stopPropagation();clickTag('${t}')">${t}</button>`).join("")}</div>`}
 function updPrev(){const b=document.getElementById("imgPrev"),h=document.getElementById("htTxt");if(!pend.length){b.innerHTML="";h.textContent="Ctrl+V 붙여넣기 (최대 4장)"}else{let s='<div class="pg">';pend.forEach((img,i)=>{s+=`<div class="pi"><img src="${img}"><button class="pr" onclick="pend.splice(${i},1);updPrev()">×</button></div>`});if(pend.length<4)s+=`<div class="pa" onclick="document.getElementById('fIn').click()">+ 추가</div>`;s+='</div>';b.innerHTML=s;h.textContent=pend.length+"/4장 선택됨"}updBtn()}
@@ -160,6 +161,9 @@ async function initApp(){
   if(p.length){posts=p;await dbSet(SK,p);console.log("💾 총",posts.length,"개 포스트 저장 완료")}
   if(!a){for(const k of["timeline-avatar","tl-av"]){const old=localStorage.getItem(k);if(old){a=old;await dbSet(AK,a);localStorage.removeItem(k);break}}}
   if(a)avSrc=a;
+  const savedTick=await dbGet("lastTick");
+  if(savedTick&&posts.length){const sec=(Date.now()-savedTick)/1000;if(sec>8&&bulkCatchUp(sec)){console.log("⏩ "+Math.floor(sec/60)+"분 경과분 반영 완료")}}
+  lastTick=Date.now();
   updCAv();render();
   /* Firebase 동기화 */
   try{
