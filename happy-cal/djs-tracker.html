@@ -1036,6 +1036,33 @@ let currentProjectId = null;
 let activeTimers = {}; // key: 'projId-phase-page', value: { startTime }
 let dailyLog = {}; // key: 'YYYY-MM-DD', value: seconds
 
+// 타이머 복구용 localStorage 저장/복구
+function saveTimersToStorage() {
+  try { localStorage.setItem('djs-active-timers', JSON.stringify(activeTimers)); } catch(e) {}
+}
+function clearTimersFromStorage() {
+  try { localStorage.removeItem('djs-active-timers'); } catch(e) {}
+}
+function restoreTimers() {
+  try {
+    const saved = localStorage.getItem('djs-active-timers');
+    if (!saved) return;
+    const timers = JSON.parse(saved);
+    const now = Date.now();
+    Object.entries(timers).forEach(([key, t]) => {
+      if (t.startTime && (now - t.startTime) < 24 * 60 * 60 * 1000) {
+        activeTimers[key] = { startTime: t.startTime };
+      }
+    });
+    if (Object.keys(activeTimers).length > 0) {
+      console.log('⏱ 타이머 복구됨:', Object.keys(activeTimers).map(k => {
+        const sec = Math.floor((now - activeTimers[k].startTime) / 1000);
+        return k + ' (' + Math.floor(sec/60) + '분 경과)';
+      }).join(', '));
+    }
+  } catch(e) { console.warn('Timer restore failed:', e); }
+}
+
 // Pagination
 const PAGE_SIZE = 10;
 let completedPage = 1;
@@ -1128,6 +1155,8 @@ async function init() {
     } catch(e2) {}
     renderProjectList();
   }
+  // 저장된 타이머 복구
+  restoreTimers();
   // Update today display every second (for active timers)
   setInterval(updateTodayDisplay, 1000);
 }
@@ -2196,6 +2225,7 @@ function startTimer(phase, page) {
 
   const key = `${p.id}-${phase}-${page}`;
   activeTimers[key] = { startTime: Date.now() };
+  saveTimersToStorage();
   renderTracking();
 }
 
@@ -2221,6 +2251,8 @@ function stopTimerInternal(key, phase, page) {
   }
 
   delete activeTimers[key];
+  if (Object.keys(activeTimers).length === 0) clearTimersFromStorage();
+  else saveTimersToStorage();
   save();
   if (elapsed > 0) logDailyTime(elapsed);
 }
