@@ -74,6 +74,7 @@ firebase.initializeApp(fbCfg);const fdb=firebase.firestore();const FB_COL="my-ti
 const fireAuth=firebase.auth();const googleProvider=new firebase.auth.GoogleAuthProvider();
 function compImg(d,mw=800,q=0.85){return new Promise(r=>{const i=new Image;i.onload=()=>{const c=document.createElement("canvas");let w=i.width,h=i.height;if(w>mw){h=Math.round(h*mw/w);w=mw}c.width=w;c.height=h;c.getContext("2d").drawImage(i,0,0,w,h);r(c.toDataURL("image/jpeg",q))};i.src=d})}
 async function fbSave(post){try{const d={...post};if(d.images&&d.images.length)d.images=await Promise.all(d.images.map(img=>img.length>100000?compImg(img):Promise.resolve(img)));await fdb.collection(FB_COL).doc(String(post.id)).set(d)}catch(e){console.error("FB save:",e)}}
+async function fbUpdateReactions(post){try{await fdb.collection(FB_COL).doc(String(post.id)).update({likes:post.likes,retweets:post.retweets,reactions:post.reactions||{},bookmarked:post.bookmarked||false})}catch(e){console.warn("FB reaction update:",e)}}
 async function fbDel(id){try{await fdb.collection(FB_COL).doc(String(id)).delete()}catch(e){console.error("FB del:",e)}}
 async function fbSaveAv(src){try{const s=src&&src.length>50000?await compImg(src,128,.7):src;await fdb.collection(FB_CFG).doc("avatar").set({src:s||null})}catch(e){console.error("FB av:",e)}}
 async function fbLoad(){try{const s=await fdb.collection(FB_COL).get();return s.docs.map(d=>d.data())}catch(e){console.error("FB load:",e);return null}}
@@ -99,7 +100,7 @@ document.getElementById("avIn").addEventListener("change",e=>{const f=e.target.f
 function simReact(ticks){let ch=false;posts.forEach(p=>{if(!p.reactions)p.reactions={};for(let i=0;i<ticks;i++){const age=(Date.now()-p.createdAt)/1e3,rate=Math.max(.15,1-age/7200);if(Math.random()<rate*LR&&p.likes<ML){p.likes=Math.min(ML,p.likes+Math.ceil(Math.random()*3));ch=true}if(Math.random()<rate*RR&&p.retweets<MR){p.retweets=Math.min(MR,p.retweets+1);ch=true}const rk=Object.keys(p.reactions);if(Math.random()<rate*ER&&rk.length<ME){const avail=REMOJIS.filter(e=>!rk.includes(e));if(avail.length){const e=pk(avail);p.reactions[e]=Math.ceil(Math.random()*3);ch=true}}rk.forEach(e=>{if(Math.random()<rate*ER*.5){p.reactions[e]=Math.min(500,p.reactions[e]+Math.ceil(Math.random()*2));ch=true}})}});return ch}
 function bulkCatchUp(sec){let ch=false;const ticks=sec/(TICK/1000);posts.forEach(p=>{if(!p.reactions)p.reactions={};const age=(Date.now()-p.createdAt)/1e3,rate=Math.max(.15,1-age/7200);const addL=Math.floor(ticks*rate*LR*2*(0.8+Math.random()*0.4));if(addL>0&&p.likes<ML){p.likes=Math.min(ML,p.likes+addL);ch=true}const addR=Math.floor(ticks*rate*RR*(0.8+Math.random()*0.4));if(addR>0&&p.retweets<MR){p.retweets=Math.min(MR,p.retweets+addR);ch=true}const rk=Object.keys(p.reactions);const newE=Math.min(ME-rk.length,Math.max(0,Math.floor(ticks*rate*ER/8)));if(newE>0){const av=REMOJIS.filter(e=>!rk.includes(e)).sort(()=>Math.random()-.5).slice(0,newE);av.forEach(e=>{p.reactions[e]=Math.ceil(Math.random()*5);ch=true})}Object.keys(p.reactions).forEach(e=>{const inc=Math.floor(ticks*rate*ER*0.3*(0.8+Math.random()*0.4));if(inc>0){p.reactions[e]=Math.min(500,p.reactions[e]+inc);ch=true}})});return ch}
 let fbDirty=false;
-function fbSyncAll(){if(!fbDirty||!posts.length)return;fbDirty=false;posts.forEach(p=>fbSave(p));console.log("☁️ Firebase 반응 동기화")}
+function fbSyncAll(){if(!fbDirty||!posts.length)return;fbDirty=false;posts.forEach(p=>fbUpdateReactions(p));console.log("☁️ Firebase 반응 동기화")}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&posts.length){const sec=(Date.now()-lastTick)/1000;if(sec>8){if(bulkCatchUp(sec)){sv();fbDirty=true;render()}}lastTick=Date.now()}else if(document.visibilityState==="hidden"){fbSyncAll()}});
 setInterval(fbSyncAll,30000);
 /* 이모지 설정 */
@@ -192,12 +193,18 @@ async function initApp(){
     const fbP=await fbLoad(),fbA=await fbLoadAv();
     if(fbP){
       const localIds=new Set(posts.map(x=>String(x.id)));
+      const fbMap={};fbP.forEach(x=>{fbMap[String(x.id)]=x});
       const fbIds=new Set(fbP.map(x=>String(x.id)));
+      /* 기존 포스트 반응 머지: 큰 쪽 채택 */
+      let merged=false;
+      posts.forEach(lp=>{const fp=fbMap[String(lp.id)];if(!fp)return;if(!lp.reactions)lp.reactions={};const fr=fp.reactions||{};Object.keys(fr).forEach(e=>{if(!lp.reactions[e]||fr[e]>lp.reactions[e]){lp.reactions[e]=fr[e];merged=true}});if((fp.likes||0)>lp.likes){lp.likes=fp.likes;merged=true}if((fp.retweets||0)>lp.retweets){lp.retweets=fp.retweets;merged=true}});
       const fromFb=fbP.filter(x=>!localIds.has(String(x.id)));
       if(fromFb.length){posts=posts.concat(fromFb);posts.sort((a,b)=>b.createdAt-a.createdAt)}
       const localOnly=posts.filter(x=>!fbIds.has(String(x.id)));
       for(const lp of localOnly)await fbSave(lp);
-      if(fromFb.length||localOnly.length){sv();render()}
+      if(fromFb.length||localOnly.length||merged){sv();render()}
+      /* 로컬 반응이 더 높으면 Firebase에 반영 */
+      posts.forEach(lp=>{const fp=fbMap[String(lp.id)];if(fp){const fr=fp.reactions||{};const lr=lp.reactions||{};let needSync=false;Object.keys(lr).forEach(e=>{if(!fr[e]||lr[e]>fr[e])needSync=true});if(lp.likes>(fp.likes||0)||lp.retweets>(fp.retweets||0))needSync=true;if(needSync)fbUpdateReactions(lp)}});
     }else if(posts.length){for(const lp of posts)await fbSave(lp)}
     if(fbA&&!avSrc){avSrc=fbA;dbSet(AK,avSrc);updCAv();render()}
     else if(avSrc&&!fbA)fbSaveAv(avSrc);
