@@ -186,6 +186,9 @@ async function initApp(){
   if(a)avSrc=a;
   const savedTick=await dbGet("lastTick");
   if(savedTick&&posts.length){const sec=(Date.now()-savedTick)/1000;if(sec>8&&bulkCatchUp(sec)){console.log("⏩ "+Math.floor(sec/60)+"분 경과분 반영 완료")}}
+  /* 포스트 나이 기반 최소 기대값 보장 */
+  posts.forEach(p=>{if(!p.reactions)p.reactions={};const ageH=(Date.now()-p.createdAt)/3600000;const expLikes=Math.floor(ageH*18*(0.85+Math.random()*0.3));const expRT=Math.floor(ageH*4*(0.85+Math.random()*0.3));if(p.likes<expLikes)p.likes=expLikes;if(p.retweets<expRT)p.retweets=expRT;const expE=Math.min(ME,Math.floor(ageH/2)+1);const rk=Object.keys(p.reactions);if(rk.length<expE){const av=REMOJIS.filter(e=>!rk.includes(e)).sort(()=>Math.random()-.5).slice(0,expE-rk.length);av.forEach(e=>{p.reactions[e]=Math.max(1,Math.floor(ageH*2*(0.7+Math.random()*0.6)))})}Object.keys(p.reactions).forEach(e=>{const expR=Math.floor(ageH*2*(0.7+Math.random()*0.6));if(p.reactions[e]<expR)p.reactions[e]=Math.min(500,expR)})});
+  sv();
   lastTick=Date.now();
   updCAv();render();
   /* Firebase 동기화 */
