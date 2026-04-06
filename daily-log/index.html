@@ -170,14 +170,6 @@ function WorkStatsTab() {
       const prev = doc.exists ? doc.data() : { dev: 0, dojin: 0, etc: 0 };
       prev[manCat] = (prev[manCat] || 0) + sec;
       await docRef.set(prev);
-      // dailyStats에도 반영
-      const dsRef = fireDb.collection("dailyStats").doc(key);
-      const dsDoc = await dsRef.get();
-      const ds = dsDoc.exists ? dsDoc.data() : {};
-      ds[manCat] = (ds[manCat] || 0) + sec;
-      ds.total = (ds.total || 0) + sec;
-      ds.manual = (ds.manual || 0) + sec;
-      await dsRef.set(ds, {merge: true});
       setManMin("");
       setManToast(true);
       setTimeout(() => setManToast(false), 1800);
@@ -208,7 +200,7 @@ function WorkStatsTab() {
     setMonthKey(nm.y + "-" + String(nm.m).padStart(2, "0"));
   };
 
-  // 오늘 카테고리별 값 (dailyStats 기본값 + 원격 수동기록 항상 합산)
+  // 오늘 카테고리별 값 (자동추적은 dailyStats, 수동기록은 remoteManualLog에서 직접)
   const rmToday = remoteManAll[todayKey] || {};
   const getTodayVal = (key) => {
     const base = todayData || {};
@@ -216,41 +208,45 @@ function WorkStatsTab() {
     if (key === "doodle") return 0;
     if (key === "doj") return base.doj || 0;
     if (key === "novel") return base.novel || 0;
-    if (key === "dev") return (base.dev || 0);
+    if (key === "dev") return (rmToday.dev || 0);
     if (key === "dojin") return (rmToday.dojin || 0);
-    if (key === "etc") return (base.etc || 0);
+    if (key === "etc") return (rmToday.etc || 0);
     return 0;
   };
 
-  // 오늘 총합 = dailyStats.total (원격수동 미포함) + 원격수동기록
-  const todayTotal = (todayData ? (todayData.total || 0) : 0) + (rmToday.dojin || 0);
+  // 오늘 총합 = 자동추적 항목 개별 합산 + 수동기록(remoteManualLog)
+  const autoTotal = todayData ? ((todayData.comm || 0) + (todayData.doodle || 0) + (todayData.doj || 0) + (todayData.novel || 0)) : 0;
+  const rmTotal = (rmToday.dev || 0) + (rmToday.dojin || 0) + (rmToday.etc || 0);
+  const todayTotal = autoTotal + rmTotal;
 
-  // 월간 데이터 집계 (monthlyStats + 원격 수동기록 합산)
+  // 월간 데이터 집계 (자동추적은 monthlyStats, 수동기록은 remoteManualLog에서 직접)
   const monthTotals = {};
   let monthGrandTotal = 0;
   let workDays = 0;
   trackers.forEach(t => { monthTotals[t.key] = 0; });
+  const monthDatesProcessed = new Set();
   if (monthData) {
     Object.entries(monthData).forEach(([dateKey, day]) => {
       if (typeof day === "object" && day.total != null) {
+        monthDatesProcessed.add(dateKey);
         const rm = remoteManAll[dateKey] || {};
-        const rmDojin = rm.dojin || 0;
-        const dayTotal = day.total + rmDojin;
+        const dayAuto = (day.comm || 0) + (day.doodle || 0) + (day.doj || 0) + (day.novel || 0);
+        const dayManual = (rm.dev || 0) + (rm.dojin || 0) + (rm.etc || 0);
+        const dayTotal = dayAuto + dayManual;
         if (dayTotal > 0) workDays++;
         monthGrandTotal += dayTotal;
         trackers.forEach(t => {
-          let v = day[t.key] || 0;
-          if (t.key === "dev") v = (day.dev || 0);
-          if (t.key === "dojin") v = rmDojin;
-          if (t.key === "etc") v = (day.etc || 0);
-          monthTotals[t.key] += v;
+          if (t.key === "dev") monthTotals[t.key] += (rm.dev || 0);
+          else if (t.key === "dojin") monthTotals[t.key] += (rm.dojin || 0);
+          else if (t.key === "etc") monthTotals[t.key] += (rm.etc || 0);
+          else monthTotals[t.key] += (day[t.key] || 0);
         });
       }
     });
   }
   // monthlyStats에 없는 날짜의 원격 수동기록도 포함
   Object.entries(remoteManAll).forEach(([dateKey, rm]) => {
-    if (dateKey.startsWith(monthKey + "-") && !(monthData && monthData[dateKey])) {
+    if (dateKey.startsWith(monthKey + "-") && !monthDatesProcessed.has(dateKey)) {
       const rmDev = rm.dev || 0, rmDojin = rm.dojin || 0, rmEtc = rm.etc || 0;
       const dayTotal = rmDev + rmDojin + rmEtc;
       if (dayTotal > 0) {
@@ -282,10 +278,10 @@ function WorkStatsTab() {
       const rm = remoteManAll[key] || {};
       const hasBase = typeof base === "object" && base.total != null;
       const comm = base.comm || 0, doodle = base.doodle || 0, doj = base.doj || 0, novel = base.novel || 0;
-      const dev = hasBase ? (base.dev || 0) : (rm.dev || 0);
+      const dev = rm.dev || 0;
       const dojin = rm.dojin || 0;
-      const etc = hasBase ? (base.etc || 0) : (rm.etc || 0);
-      const total = (hasBase ? (base.total || 0) : ((rm.dev || 0) + (rm.etc || 0))) + (rm.dojin || 0);
+      const etc = rm.etc || 0;
+      const total = comm + doodle + doj + novel + dev + dojin + etc;
       cells.push({ day: d, key, comm, doodle, doj, novel, dev, dojin, etc, total });
     }
     return cells;
