@@ -327,7 +327,7 @@ const syncMonthToFirebase=async(yearMonth,cells,rmLog)=>{
   try{
     const data={};
     cells.forEach(c=>{if(c&&c.key){
-      data[c.key]={comm:c.comm||0,doodle:c.doodle||0,doj:c.doj||0,novel:c.novel||0,dev:c.dev||0,etc:c.etc||0,total:c.total||0};
+      data[c.key]={comm:c.comm||0,doodle:c.doodle||0,doj:c.doj||0,novel:c.novel||0,dev:c.dev||0,dojin:c.dojin||0,etc:c.etc||0,total:c.total||0};
     }});
     await fireDb.collection('monthlyStats').doc(yearMonth).set(data,{merge:true});
   }catch(e){console.warn('Firebase month sync failed:',e)}
@@ -615,15 +615,15 @@ function TodayWorkTime({onClick}){
         let novel=0,novelChars=0;
         if(novelDoc.exists){const nd=novelDoc.data();const dl=nd.dailyLog||{};novel=dl[tk]||0;const wl=nd.dailyWritingLog||{};novelChars=wl[tk]||0}
         // 수동 기록 (daily-log에서 입력한 것)
-        let rmDev=0,rmEtc=0,rm=0;
-        if(rmDoc.exists){const d=rmDoc.data();rmDev=d.dev||0;rmEtc=d.etc||0;rm=rmDev+rmEtc}
+        let rmDev=0,rmDojin=0,rmEtc=0,rm=0;
+        if(rmDoc.exists){const d=rmDoc.data();rmDev=d.dev||0;rmDojin=d.dojin||0;rmEtc=d.etc||0;rm=rmDev+rmDojin+rmEtc}
         // 동인지 작업량(페이지 등)
         let dojOut={dojConti:0,dojRough:0,dojArtwork:0,dojWritingPages:0,dojWritingChars:0};
         if(dojDoc.exists){const wo=dojDoc.data().workOutput||{};const entry=wo[tk]||{};dojOut={dojConti:entry.conti||0,dojRough:entry.rough||0,dojArtwork:entry.artwork||0,dojWritingPages:entry.wPages||0,dojWritingChars:entry.wChars||0}}
 
         const t=comm+doodle+doj+novel+rm;
         setTotal(t);
-        syncToFirebase(tk,{comm,doodle,doj,novel,dev:rmDev,etc:rmEtc,rm,total:comm+doodle+doj+novel+rm,updatedAt:Date.now(),
+        syncToFirebase(tk,{comm,doodle,doj,novel,dev:rmDev,dojin:rmDojin,etc:rmEtc,rm,total:comm+doodle+doj+novel+rm,updatedAt:Date.now(),
           workOutput:{...dojOut,novelChars}
         });
       }catch(e){console.warn('TodayWorkTime update failed:',e)}
@@ -816,8 +816,8 @@ function StatsTab(){
     for(let d=1;d<=lastDay;d++){
       const key=`${month.y}-${String(month.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const c=commLog[key]||0,dl=doodleLog[key]||0,dj=dojLog[key]||0,nv=novelLog[key]||0;
-      const dev=getManual(key,'dev'),etc=getManual(key,'etc');
-      cells.push({day:d,key,comm:c,doodle:dl,doj:dj,novel:nv,dev,etc,total:c+dl+dj+nv+dev+etc});
+      const dev=getManual(key,'dev'),dojin=getManual(key,'dojin'),etc=getManual(key,'etc');
+      cells.push({day:d,key,comm:c,doodle:dl,doj:dj,novel:nv,dev,dojin,etc,total:c+dl+dj+nv+dev+dojin+etc});
     }
     return cells;
   };
@@ -835,8 +835,9 @@ function StatsTab(){
   const monthDoj=monthCells.reduce((s,c)=>s+c.doj,0);
   const monthNovel=monthCells.reduce((s,c)=>s+c.novel,0);
   const monthDev=monthCells.reduce((s,c)=>s+c.dev,0);
+  const monthDojin=monthCells.reduce((s,c)=>s+c.dojin,0);
   const monthEtc=monthCells.reduce((s,c)=>s+c.etc,0);
-  const trackerMax=Math.max(monthComm,monthDoodle,monthDoj,monthNovel,monthDev,monthEtc,1);
+  const trackerMax=Math.max(monthComm,monthDoodle,monthDoj,monthNovel,monthDev,monthDojin,monthEtc,1);
 
   useEffect(()=>{
     if(monthCells.length>0){
@@ -903,6 +904,7 @@ function StatsTab(){
           {selDay.doj>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#B48CDE'}}/><span className="day-detail-name">동인지</span><span className="day-detail-time">{fmtT(selDay.doj)}</span></div>}
           {selDay.novel>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#5BA87A'}}/><span className="day-detail-name">웹소설</span><span className="day-detail-time">{fmtT(selDay.novel)}</span></div>}
           {selDay.dev>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#4A90D9'}}/><span className="day-detail-name">개발</span><span className="day-detail-time">{fmtT(selDay.dev)}</span></div>}
+          {selDay.dojin>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#c97ca0'}}/><span className="day-detail-name">동인</span><span className="day-detail-time">{fmtT(selDay.dojin)}</span></div>}
           {selDay.etc>0&&<div className="day-detail-row"><div className="day-detail-dot" style={{background:'#999'}}/><span className="day-detail-name">기타</span><span className="day-detail-time">{fmtT(selDay.etc)}</span></div>}
         </div>}
       </div>}
@@ -915,8 +917,9 @@ function StatsTab(){
         <div className="tracker-row"><div className="tracker-dot" style={{background:'#F4B183'}}/><span className="tracker-name">일러스트</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDoodle/trackerMax*100)}%`,background:'#F4B183'}}/></div><span className="tracker-time">{fmtT(monthDoodle)}</span></div>
         <div className="tracker-row"><div className="tracker-dot" style={{background:'#B48CDE'}}/><span className="tracker-name">동인지</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDoj/trackerMax*100)}%`,background:'#B48CDE'}}/></div><span className="tracker-time">{fmtT(monthDoj)}</span></div>
         <div className="tracker-row"><div className="tracker-dot" style={{background:'#5BA87A'}}/><span className="tracker-name">웹소설</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthNovel/trackerMax*100)}%`,background:'#5BA87A'}}/></div><span className="tracker-time">{fmtT(monthNovel)}</span></div>
-        {(monthDev>0||monthEtc>0)&&<div style={{borderTop:'1px solid var(--border-light)',marginTop:4,paddingTop:4}}/>}
+        {(monthDev>0||monthDojin>0||monthEtc>0)&&<div style={{borderTop:'1px solid var(--border-light)',marginTop:4,paddingTop:4}}/>}
         {monthDev>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#4A90D9'}}/><span className="tracker-name">개발</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDev/trackerMax*100)}%`,background:'#4A90D9'}}/></div><span className="tracker-time">{fmtT(monthDev)}</span></div>}
+        {monthDojin>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#c97ca0'}}/><span className="tracker-name">동인</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthDojin/trackerMax*100)}%`,background:'#c97ca0'}}/></div><span className="tracker-time">{fmtT(monthDojin)}</span></div>}
         {monthEtc>0&&<div className="tracker-row"><div className="tracker-dot" style={{background:'#999'}}/><span className="tracker-name">기타</span><div className="tracker-bar-bg"><div className="tracker-bar" style={{width:`${Math.round(monthEtc/trackerMax*100)}%`,background:'#999'}}/></div><span className="tracker-time">{fmtT(monthEtc)}</span></div>}
       </div>
     </div>
