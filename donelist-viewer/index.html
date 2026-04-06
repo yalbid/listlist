@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Donelist Viewer</title>
+<meta name="theme-color" content="#1a1a2e">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #1a1a2e; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeInUp 0.3s ease-out; }
+  .tab-btn { transition: all 0.2s ease; }
+  .tab-btn:hover { background: rgba(255,255,255,0.1) !important; }
+  .cat-btn { transition: all 0.2s ease; }
+  .cat-btn:hover { transform: translateY(-2px); }
+  .cat-btn:active { transform: scale(0.96); }
+  .date-group-header { transition: background 0.15s ease; }
+  .date-group-header:hover { background: rgba(255,255,255,0.06) !important; }
+  .page-btn { transition: all 0.15s ease; }
+  .page-btn:hover { background: rgba(255,255,255,0.12) !important; }
+  input:focus { outline: none; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo } = React;
+
+/* ── Firebase ── */
+const firebaseApp = firebase.initializeApp({
+  apiKey: "AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",
+  authDomain: "happycalendar-1dd07.firebaseapp.com",
+  projectId: "happycalendar-1dd07",
+  storageBucket: "happycalendar-1dd07.firebasestorage.app",
+  messagingSenderId: "961264346042",
+  appId: "1:961264346042:web:35c85ff0a1c02ab2acb383"
+});
+const fireDb = firebaseApp.firestore();
+const fireAuth = firebaseApp.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+/* ── 카테고리 ── */
+const CATEGORIES = [
+  { id: "manga", label: "만화", emoji: "\u{1F4D6}", color: "#e8927c" },
+  { id: "illust", label: "일러스트", emoji: "\u{1F3A8}", color: "#d4a574" },
+  { id: "writing", label: "글", emoji: "\u270D\uFE0F", color: "#7cb5a0" },
+  { id: "dev", label: "개발", emoji: "\u{1F4BB}", color: "#7ca3c4" },
+  { id: "dojin", label: "동인", emoji: "\u{1F4D5}", color: "#c97ca0" },
+  { id: "etc", label: "기타", emoji: "\u{1F4CC}", color: "#b39dcc" },
+];
+const catMap = {};
+CATEGORIES.forEach(c => { catMap[c.id] = c; });
+
+const ITEMS_PER_PAGE = 50;
+
+/* ── 날짜 유틸 ── */
+function pad2(n) { return String(n).padStart(2, "0"); }
+function dateStr(y, m, d) { return y + "-" + pad2(m) + "-" + pad2(d); }
+
+function getLogDate() {
+  const d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
+}
+
+function getWeekRange(y, m, d) {
+  const date = new Date(y, m - 1, d);
+  const dow = date.getDay();
+  const mon = new Date(date);
+  mon.setDate(date.getDate() - ((dow + 6) % 7));
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return {
+    start: dateStr(mon.getFullYear(), mon.getMonth() + 1, mon.getDate()),
+    end: dateStr(sun.getFullYear(), sun.getMonth() + 1, sun.getDate()),
+    label: mon.getFullYear() + "년 " + (mon.getMonth() + 1) + "월 " + Math.ceil(mon.getDate() / 7) + "주차"
+  };
+}
+
+function getMonthRange(y, m) {
+  const last = new Date(y, m, 0).getDate();
+  return {
+    start: dateStr(y, m, 1),
+    end: dateStr(y, m, last),
+    label: y + "년 " + m + "월"
+  };
+}
+
+function getYearRange(y) {
+  return {
+    start: dateStr(y, 1, 1),
+    end: dateStr(y, 12, 31),
+    label: y + "년"
+  };
+}
+
+function shiftWeek(startStr, delta) {
+  const d = new Date(startStr);
+  d.setDate(d.getDate() + delta * 7);
+  return getWeekRange(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+function shiftMonth(y, m, delta) {
+  let nm = m + delta;
+  let ny = y;
+  while (nm < 1) { nm += 12; ny--; }
+  while (nm > 12) { nm -= 12; ny++; }
+  return getMonthRange(ny, nm);
+}
+
+function shiftYear(y, delta) {
+  return getYearRange(y + delta);
+}
+
+function formatDateLabel(dateKey) {
+  const [y, m, d] = dateKey.split("-");
+  const dow = ["일", "월", "화", "수", "목", "금", "토"];
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  return parseInt(m) + "월 " + parseInt(d) + "일 (" + dow[date.getDay()] + ")";
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
+/* ── Firebase 데이터 로드 ── */
+async function loadDateRange(startDate, endDate) {
+  const snap = await fireDb.collection("dailyLogEntries")
+    .where(firebase.firestore.FieldPath.documentId(), ">=", startDate)
+    .where(firebase.firestore.FieldPath.documentId(), "<=", endDate)
+    .get();
+  const result = {};
+  snap.forEach(doc => {
+    const data = doc.data();
+    let items = [];
+    if (data.items) {
+      try { items = JSON.parse(data.items); } catch(e) {}
+    } else if (data.entries) {
+      items = data.entries;
+    }
+    if (items.length > 0) result[doc.id] = items;
+  });
+  return result;
+}
+
+async function loadAll() {
+  const snap = await fireDb.collection("dailyLogEntries").get();
+  const result = {};
+  snap.forEach(doc => {
+    const data = doc.data();
+    let items = [];
+    if (data.items) {
+      try { items = JSON.parse(data.items); } catch(e) {}
+    } else if (data.entries) {
+      items = data.entries;
+    }
+    if (items.length > 0) result[doc.id] = items;
+  });
+  return result;
+}
+
+/* ── 인증 게이트 ── */
+function AuthGate({ children }) {
+  const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    const unsub = fireAuth.onAuthStateChanged(u => { setUser(u); setChecking(false); });
+    return unsub;
+  }, []);
+  const doLogin = () => {
+    setErr("");
+    fireAuth.signInWithPopup(googleProvider).catch(e => {
+      setErr(
+        e.code === "auth/popup-blocked"
+          ? "팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요."
+          : e.message
+      );
+    });
+  };
+  if (checking) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#1a1a2e", color: "#999", fontFamily: "Noto Sans KR, sans-serif" }}>
+      <p>확인 중...</p>
+    </div>
+  );
+  if (!user) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, background: "#1a1a2e", fontFamily: "Noto Sans KR, sans-serif" }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>📋</div>
+      <p style={{ fontSize: 15, color: "#999" }}>로그인이 필요합니다</p>
+      <button onClick={doLogin} style={{ padding: "10px 28px", fontSize: 14, background: "#b8a9d4", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>Google 계정으로 로그인</button>
+      {err && <p style={{ fontSize: 12, color: "#e06060", maxWidth: 400, textAlign: "center", lineHeight: 1.5, padding: "0 20px" }}>{err}</p>}
+    </div>
+  );
+  return children;
+}
+
+/* ── 메인 앱 ── */
+function DonelistViewer() {
+  const today = getLogDate();
+
+  // 뷰 모드: week, month, year, all
+  const [viewMode, setViewMode] = useState("week");
+
+  // 기간 상태
+  const [weekRange, setWeekRange] = useState(() => getWeekRange(today.y, today.m, today.d));
+  const [monthRange, setMonthRange] = useState(() => getMonthRange(today.y, today.m));
+  const [yearRange, setYearRange] = useState(() => getYearRange(today.y));
+
+  // 카테고리 필터
+  const [catFilter, setCatFilter] = useState("all");
+
+  // 데이터
+  const [rawData, setRawData] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  // 페이징
+  const [page, setPage] = useState(1);
+
+  // 접기/펼치기 (날짜별)
+  const [collapsed, setCollapsed] = useState({});
+
+  // 현재 기간 정보
+  const currentRange = useMemo(() => {
+    if (viewMode === "week") return weekRange;
+    if (viewMode === "month") return monthRange;
+    if (viewMode === "year") return yearRange;
+    return { start: null, end: null, label: "전체" };
+  }, [viewMode, weekRange, monthRange, yearRange]);
+
+  // 데이터 로드
+  useEffect(() => {
+    setLoading(true);
+    setPage(1);
+    setCollapsed({});
+    const doLoad = async () => {
+      let data;
+      if (viewMode === "all") {
+        data = await loadAll();
+      } else {
+        data = await loadDateRange(currentRange.start, currentRange.end);
+      }
+      setRawData(data);
+      setLoading(false);
+    };
+    doLoad();
+  }, [viewMode, currentRange.start, currentRange.end]);
+
+  // 필터링된 아이템 (날짜별 그룹)
+  const { dateGroups, totalItems, filteredItems } = useMemo(() => {
+    const dates = Object.keys(rawData).sort().reverse();
+    const groups = [];
+    let total = 0;
+    const allItems = [];
+
+    dates.forEach(dateKey => {
+      const items = rawData[dateKey] || [];
+      const filtered = catFilter === "all"
+        ? items
+        : items.filter(item => item.category === catFilter);
+      if (filtered.length > 0) {
+        const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+        groups.push({ dateKey, items: sorted });
+        total += sorted.length;
+        sorted.forEach(item => allItems.push({ ...item, dateKey }));
+      }
+    });
+
+    return { dateGroups: groups, totalItems: total, filteredItems: allItems };
+  }, [rawData, catFilter]);
+
+  // 페이지네이션 적용
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+  const pagedItems = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return filteredItems.slice(start, end);
+  }, [filteredItems, page]);
+
+  // 페이지에 해당하는 날짜 그룹으로 재구성
+  const pagedGroups = useMemo(() => {
+    const groups = [];
+    let currentDate = null;
+    let currentGroup = null;
+    pagedItems.forEach(item => {
+      if (item.dateKey !== currentDate) {
+        currentDate = item.dateKey;
+        currentGroup = { dateKey: item.dateKey, items: [] };
+        groups.push(currentGroup);
+      }
+      currentGroup.items.push(item);
+    });
+    return groups;
+  }, [pagedItems]);
+
+  // 기간 이동
+  const goPrev = () => {
+    setPage(1);
+    setCollapsed({});
+    if (viewMode === "week") setWeekRange(r => shiftWeek(r.start, -1));
+    else if (viewMode === "month") {
+      const [y, m] = monthRange.start.split("-").map(Number);
+      setMonthRange(shiftMonth(y, m, -1));
+    }
+    else if (viewMode === "year") {
+      const y = parseInt(yearRange.start);
+      setYearRange(shiftYear(y, -1));
+    }
+  };
+
+  const goNext = () => {
+    setPage(1);
+    setCollapsed({});
+    if (viewMode === "week") setWeekRange(r => shiftWeek(r.start, 1));
+    else if (viewMode === "month") {
+      const [y, m] = monthRange.start.split("-").map(Number);
+      setMonthRange(shiftMonth(y, m, 1));
+    }
+    else if (viewMode === "year") {
+      const y = parseInt(yearRange.start);
+      setYearRange(shiftYear(y, 1));
+    }
+  };
+
+  const toggleDate = (dateKey) => {
+    setCollapsed(prev => ({ ...prev, [dateKey]: !prev[dateKey] }));
+  };
+
+  // 전체 접기/펼치기
+  const allCollapsed = pagedGroups.length > 0 && pagedGroups.every(g => collapsed[g.dateKey]);
+  const toggleAll = () => {
+    if (allCollapsed) {
+      setCollapsed({});
+    } else {
+      const next = {};
+      pagedGroups.forEach(g => { next[g.dateKey] = true; });
+      setCollapsed(next);
+    }
+  };
+
+  // 카테고리별 건수 (현재 기간 내)
+  const catCounts = useMemo(() => {
+    const counts = { all: 0 };
+    CATEGORIES.forEach(c => { counts[c.id] = 0; });
+    Object.values(rawData).forEach(items => {
+      items.forEach(item => {
+        counts.all++;
+        if (counts[item.category] !== undefined) counts[item.category]++;
+      });
+    });
+    return counts;
+  }, [rawData]);
+
+  return (
+    <div style={S.container}>
+      {/* 헤더 */}
+      <div style={S.header}>
+        <div style={S.headerTop}>
+          <div>
+            <h1 style={{ ...S.title, cursor: "pointer" }} onClick={() => { if (confirm("로그아웃할까요?")) fireAuth.signOut(); }} title="로그아웃">Donelist Viewer</h1>
+            <p style={S.subtitle}>한 일 모아보기</p>
+          </div>
+          {totalItems > 0 && (
+            <div style={S.badge}>
+              <span style={S.badgeNum}>{totalItems}</span>
+              <span style={S.badgeLabel}>건</span>
+            </div>
+          )}
+        </div>
+
+        {/* 뷰 모드 탭 */}
+        <div style={S.tabs}>
+          {[
+            { id: "week", label: "주간" },
+            { id: "month", label: "월간" },
+            { id: "year", label: "연간" },
+            { id: "all", label: "전체" },
+          ].map(v => (
+            <button key={v.id} className="tab-btn" style={{ ...S.tab, ...(viewMode === v.id ? S.tabActive : {}) }}
+              onClick={() => { setViewMode(v.id); setPage(1); setCatFilter("all"); setCollapsed({}); }}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 콘텐츠 */}
+      <div style={S.content}>
+
+        {/* 기간 네비게이션 */}
+        {viewMode !== "all" && (
+          <div style={S.periodNav}>
+            <button onClick={goPrev} style={S.navBtn}>◀</button>
+            <span style={S.periodLabel}>{currentRange.label}</span>
+            <button onClick={goNext} style={S.navBtn}>▶</button>
+          </div>
+        )}
+
+        {/* 카테고리 필터 */}
+        <div style={S.catRow}>
+          <button className="cat-btn"
+            style={{ ...S.catBtn, background: catFilter === "all" ? "rgba(184,169,212,0.3)" : "rgba(255,255,255,0.06)", color: catFilter === "all" ? "#e0e0e0" : "#a0a0a0", borderColor: catFilter === "all" ? "#b8a9d455" : "rgba(255,255,255,0.1)" }}
+            onClick={() => { setCatFilter("all"); setPage(1); }}>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>전체</span>
+            <span style={{ fontSize: 11, color: catFilter === "all" ? "#ccc" : "#666" }}>{catCounts.all}</span>
+          </button>
+          {CATEGORIES.map(cat => (
+            <button key={cat.id} className="cat-btn"
+              style={{ ...S.catBtn, background: catFilter === cat.id ? cat.color : "rgba(255,255,255,0.06)", color: catFilter === cat.id ? "#fff" : "#a0a0a0", borderColor: catFilter === cat.id ? cat.color : "rgba(255,255,255,0.1)" }}
+              onClick={() => { setCatFilter(cat.id); setPage(1); }}>
+              <span style={{ fontSize: 14 }}>{cat.emoji}</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</span>
+              <span style={{ fontSize: 11, color: catFilter === cat.id ? "rgba(255,255,255,0.7)" : "#666" }}>{catCounts[cat.id]}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* 로딩 */}
+        {loading ? (
+          <div style={S.empty}>
+            <p style={{ color: "#888", fontSize: 14 }}>불러오는 중...</p>
+          </div>
+        ) : totalItems === 0 ? (
+          <div style={S.empty}>
+            <span style={{ fontSize: 32, marginBottom: 12 }}>📭</span>
+            <p style={{ color: "#777", fontSize: 14, lineHeight: 1.6 }}>이 기간에는 기록이 없어요</p>
+          </div>
+        ) : (
+          <>
+            {/* 전체 접기/펼치기 + 페이지 정보 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <button onClick={toggleAll} style={S.toggleAllBtn}>
+                {allCollapsed ? "▶ 모두 펼치기" : "▼ 모두 접기"}
+              </button>
+              {totalPages > 1 && (
+                <span style={{ fontSize: 12, color: "#666" }}>{page} / {totalPages} 페이지</span>
+              )}
+            </div>
+
+            {/* 날짜별 그룹 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {pagedGroups.map(group => {
+                const isCollapsed = collapsed[group.dateKey];
+                const cat = catMap;
+                return (
+                  <div key={group.dateKey} className="fade-in" style={S.dateGroup}>
+                    {/* 날짜 헤더 */}
+                    <div className="date-group-header" onClick={() => toggleDate(group.dateKey)}
+                      style={S.dateHeader}>
+                      <span style={S.collapseIcon}>{isCollapsed ? "▶" : "▼"}</span>
+                      <span style={S.dateLabel}>{formatDateLabel(group.dateKey)}</span>
+                      <span style={S.dateCount}>{group.items.length}건</span>
+                    </div>
+
+                    {/* 항목 리스트 */}
+                    {!isCollapsed && (
+                      <div style={S.itemList}>
+                        {group.items.map(item => {
+                          const c = catMap[item.category] || { emoji: "?", label: "?", color: "#888" };
+                          return (
+                            <div key={item.id || item.timestamp} style={S.entry}>
+                              <div style={{ ...S.entryDot, background: c.color }} />
+                              <div style={S.entryContent}>
+                                <div style={S.entryMeta}>
+                                  <span style={{ ...S.entryTag, color: c.color, background: c.color + "18" }}>
+                                    {c.emoji} {c.label}
+                                  </span>
+                                  <span style={S.entryTime}>{formatTime(item.timestamp)}</span>
+                                </div>
+                                <p style={S.entryText}>{item.memo}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div style={S.pagination}>
+                <button className="page-btn" style={{ ...S.pageBtn, opacity: page > 1 ? 1 : 0.3 }}
+                  disabled={page <= 1} onClick={() => setPage(p => p - 1)}>◀ 이전</button>
+
+                <div style={S.pageNumbers}>
+                  {(() => {
+                    const pages = [];
+                    let start = Math.max(1, page - 2);
+                    let end = Math.min(totalPages, start + 4);
+                    if (end - start < 4) start = Math.max(1, end - 4);
+
+                    if (start > 1) {
+                      pages.push(
+                        <button key={1} className="page-btn" style={{ ...S.pageNumBtn, ...(page === 1 ? S.pageNumActive : {}) }}
+                          onClick={() => setPage(1)}>1</button>
+                      );
+                      if (start > 2) pages.push(<span key="d1" style={S.pageDots}>...</span>);
+                    }
+
+                    for (let i = start; i <= end; i++) {
+                      pages.push(
+                        <button key={i} className="page-btn" style={{ ...S.pageNumBtn, ...(page === i ? S.pageNumActive : {}) }}
+                          onClick={() => setPage(i)}>{i}</button>
+                      );
+                    }
+
+                    if (end < totalPages) {
+                      if (end < totalPages - 1) pages.push(<span key="d2" style={S.pageDots}>...</span>);
+                      pages.push(
+                        <button key={totalPages} className="page-btn" style={{ ...S.pageNumBtn, ...(page === totalPages ? S.pageNumActive : {}) }}
+                          onClick={() => setPage(totalPages)}>{totalPages}</button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                <button className="page-btn" style={{ ...S.pageBtn, opacity: page < totalPages ? 1 : 0.3 }}
+                  disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>다음 ▶</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── 스타일 ── */
+const S = {
+  container: {
+    fontFamily: "'Noto Sans KR', sans-serif",
+    background: "linear-gradient(170deg, #1a1a2e 0%, #16213e 40%, #1a1a2e 100%)",
+    minHeight: "100vh",
+    color: "#e0e0e0",
+    maxWidth: 580,
+    margin: "0 auto",
+  },
+  header: {
+    padding: "28px 20px 0",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%)",
+  },
+  headerTop: {
+    display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20,
+  },
+  title: { fontSize: 24, fontWeight: 600, color: "#f0f0f0", letterSpacing: "-0.5px", marginBottom: 4 },
+  subtitle: { fontSize: 13, color: "#888", fontWeight: 300 },
+  badge: { display: "flex", alignItems: "baseline", gap: 3, background: "rgba(255,255,255,0.06)", borderRadius: 12, padding: "8px 14px" },
+  badgeNum: { fontSize: 22, fontWeight: 600, color: "#b8a9d4" },
+  badgeLabel: { fontSize: 12, color: "#999" },
+
+  tabs: { display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 3 },
+  tab: { flex: 1, border: "none", background: "transparent", color: "#888", fontSize: 14, fontWeight: 500, padding: "10px 0", borderRadius: 8, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  tabActive: { background: "rgba(255,255,255,0.08)", color: "#e0e0e0" },
+
+  content: { padding: "20px 20px 40px" },
+
+  periodNav: {
+    display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16,
+    background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "12px 16px",
+  },
+  navBtn: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
+    color: "#aaa", fontSize: 12, padding: "6px 14px", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif",
+  },
+  periodLabel: { fontSize: 15, fontWeight: 600, color: "#e0e0e0" },
+
+  catRow: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 },
+  catBtn: {
+    display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 20,
+    border: "1px solid", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif",
+  },
+
+  empty: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" },
+
+  toggleAllBtn: {
+    background: "none", border: "none", color: "#888", fontSize: 12, cursor: "pointer",
+    fontFamily: "'Noto Sans KR', sans-serif", padding: "4px 0",
+  },
+
+  dateGroup: {
+    background: "rgba(255,255,255,0.02)", borderRadius: 12, overflow: "hidden",
+  },
+  dateHeader: {
+    display: "flex", alignItems: "center", gap: 8, padding: "12px 16px",
+    cursor: "pointer", background: "rgba(255,255,255,0.03)", userSelect: "none",
+  },
+  collapseIcon: { fontSize: 10, color: "#666", width: 14 },
+  dateLabel: { fontSize: 14, fontWeight: 600, color: "#e0e0e0", flex: 1 },
+  dateCount: { fontSize: 12, color: "#888", background: "rgba(255,255,255,0.06)", padding: "2px 10px", borderRadius: 10 },
+
+  itemList: { display: "flex", flexDirection: "column", gap: 1 },
+  entry: {
+    display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
+    background: "rgba(255,255,255,0.01)",
+  },
+  entryDot: { width: 4, height: 4, borderRadius: "50%", marginTop: 8, flexShrink: 0 },
+  entryContent: { flex: 1, minWidth: 0 },
+  entryMeta: { display: "flex", alignItems: "center", gap: 8, marginBottom: 4 },
+  entryTag: { fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 6 },
+  entryTime: { fontSize: 11, color: "#666" },
+  entryText: { fontSize: 14, color: "#ccc", lineHeight: 1.5 },
+
+  pagination: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+    marginTop: 24, padding: "16px 0",
+  },
+  pageBtn: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
+    color: "#aaa", fontSize: 12, padding: "8px 14px", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif",
+  },
+  pageNumbers: { display: "flex", alignItems: "center", gap: 4 },
+  pageNumBtn: {
+    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6,
+    color: "#888", fontSize: 12, padding: "6px 10px", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif",
+    minWidth: 32, textAlign: "center",
+  },
+  pageNumActive: {
+    background: "rgba(184,169,212,0.2)", borderColor: "#b8a9d455", color: "#b8a9d4", fontWeight: 600,
+  },
+  pageDots: { color: "#666", fontSize: 12, padding: "0 4px" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AuthGate><DonelistViewer /></AuthGate>);
+</script>
+</body>
+</html>
