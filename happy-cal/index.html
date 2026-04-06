@@ -771,6 +771,7 @@ function StatsTab(){
   
   const[hover,setHover]=useState(null);
   const[selDay,setSelDay]=useState(null);
+  const[catColor,setCatColor]=useState(false);
 
   const fmtT=s=>{if(!s||s<60)return'0m';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}h ${m}m`:`${m}m`};
   const fmtTL=s=>{if(!s||s<60)return'0분';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}시간 ${m}분`:`${m}분`};
@@ -848,6 +849,8 @@ function StatsTab(){
 
   const maxTotal=Math.max(...monthCells.map(c=>c.total),1);
   const getLevel=t=>{if(t===0)return 0;const r=t/maxTotal;if(r<0.25)return 1;if(r<0.5)return 2;if(r<0.75)return 3;return 4};
+  const catColorMap={comm:'#E8945A',doodle:'#F4B183',doj:'#B48CDE',novel:'#5BA87A',dev:'#4A90D9',dojin:'#c97ca0',etc:'#999'};
+  const getDomColor=c=>{if(!c||c.total<=0)return null;let max=0,col=null;['comm','doodle','doj','novel','dev','dojin','etc'].forEach(k=>{if((c[k]||0)>max){max=c[k];col=catColorMap[k]}});return col};
 
   const DOW=['일','월','화','수','목','금','토'];
   const MONTH_NAMES=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -870,6 +873,9 @@ function StatsTab(){
           {!isCurrentMonth&&<button onClick={goToday} style={{fontSize:11}}>오늘</button>}
         </div>
       </div>
+      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}>
+        <button onClick={()=>setCatColor(!catColor)} style={{background:catColor?'var(--accent-light)':'var(--bg-input)',border:'1px solid '+(catColor?'var(--accent)':'var(--border)'),borderRadius:6,padding:'3px 10px',fontSize:11,color:catColor?'var(--accent)':'var(--text-muted)',cursor:'pointer',fontFamily:'inherit'}}>🎨 카테고리별</button>
+      </div>
       <div className="heatmap-grid">
         {DOW.map(d=><div key={d} className="heatmap-dow">{d}</div>)}
         {cells.map((c,i)=>{
@@ -877,8 +883,10 @@ function StatsTab(){
           const lv=getLevel(c.total);
           const isToday=c.key===todayStr;
           const isSel=selDay&&selDay.key===c.key;
-          return <div key={c.key} className={`heatmap-cell lv${lv}${isToday?' today-cell':''}${isSel?' selected-cell':''}`}
-            onClick={()=>setSelDay(isSel?null:c)} style={{cursor:'pointer'}}
+          const domC=catColor?getDomColor(c):null;
+          const bgStyle=domC?{background:domC,opacity:lv===1?0.3:lv===2?0.5:lv===3?0.75:1}:{};
+          return <div key={c.key} className={`heatmap-cell${domC?'':' lv'+lv}${isToday?' today-cell':''}${isSel?' selected-cell':''}`}
+            onClick={()=>setSelDay(isSel?null:c)} style={{cursor:'pointer',...bgStyle}}
             onMouseEnter={()=>setHover(c)} onMouseLeave={()=>setHover(null)}>
             {hover&&hover.key===c.key&&<div className="heatmap-tooltip">{c.day}일 — {c.total>0?fmtTL(c.total):'작업 없음'}</div>}
           </div>;
