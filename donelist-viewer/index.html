@@ -85,10 +85,21 @@ function getWeekRange(y, m, d) {
   mon.setDate(date.getDate() - ((dow + 6) % 7));
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 6);
+  // 목요일 기준으로 해당 주가 속하는 달 결정
+  const thu = new Date(mon);
+  thu.setDate(mon.getDate() + 3);
+  const labelYear = thu.getFullYear();
+  const labelMonth = thu.getMonth() + 1;
+  // 그 달 1일이 포함된 주의 월요일부터 세기
+  const firstOfMonth = new Date(labelYear, labelMonth - 1, 1);
+  const firstDow = firstOfMonth.getDay();
+  const firstWeekMon = new Date(firstOfMonth);
+  firstWeekMon.setDate(1 - ((firstDow + 6) % 7));
+  const weekNum = Math.round((mon - firstWeekMon) / (7 * 86400000)) + 1;
   return {
     start: dateStr(mon.getFullYear(), mon.getMonth() + 1, mon.getDate()),
     end: dateStr(sun.getFullYear(), sun.getMonth() + 1, sun.getDate()),
-    label: mon.getFullYear() + "년 " + (mon.getMonth() + 1) + "월 " + Math.ceil(mon.getDate() / 7) + "주차"
+    label: labelYear + "년 " + labelMonth + "월 " + weekNum + "주차"
   };
 }
 
