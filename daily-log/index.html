@@ -56,6 +56,7 @@ const CATEGORIES = [
   { id: "illust", label: "일러스트", emoji: "🎨", color: "#d4a574" },
   { id: "writing", label: "글", emoji: "✍️", color: "#7cb5a0" },
   { id: "dev", label: "개발", emoji: "💻", color: "#7ca3c4" },
+  { id: "dojin", label: "동인", emoji: "📕", color: "#c97ca0" },
   { id: "etc", label: "기타", emoji: "📌", color: "#b39dcc" },
 ];
 
@@ -214,14 +215,14 @@ function WorkStatsTab() {
     if (key === "doodle") return 0;
     if (key === "doj") return base.doj || 0;
     if (key === "novel") return base.novel || 0;
-    if (key === "dev") return (base.dev || 0);
-    if (key === "dojin") return (base.dojin || 0);
-    if (key === "etc") return (base.etc || 0);
+    if (key === "dev") return (base.dev || 0) + (rmToday.dev || 0);
+    if (key === "dojin") return (base.dojin || 0) + (rmToday.dojin || 0);
+    if (key === "etc") return (base.etc || 0) + (rmToday.etc || 0);
     return 0;
   };
 
   // 오늘 총합 = dailyStats.total (원격수동 미포함) + 원격수동기록
-  const todayTotal = (todayData ? (todayData.total || 0) : 0);
+  const todayTotal = (todayData ? (todayData.total || 0) : 0) + (rmToday.dev || 0) + (rmToday.dojin || 0) + (rmToday.etc || 0);
 
   // 월간 데이터 집계 (monthlyStats + 원격 수동기록 합산)
   const monthTotals = {};
@@ -232,14 +233,15 @@ function WorkStatsTab() {
     Object.entries(monthData).forEach(([dateKey, day]) => {
       if (typeof day === "object" && day.total != null) {
         const rm = remoteManAll[dateKey] || {};
-        const rmDev = rm.dev || 0, rmEtc = rm.etc || 0;
-        const dayTotal = day.total;
+        const rmDev = rm.dev || 0, rmDojin = rm.dojin || 0, rmEtc = rm.etc || 0;
+        const dayTotal = day.total + rmDev + rmDojin + rmEtc;
         if (dayTotal > 0) workDays++;
         monthGrandTotal += dayTotal;
         trackers.forEach(t => {
           let v = day[t.key] || 0;
-          if (t.key === "dev") v = (day.dev || 0);
-          if (t.key === "etc") v = (day.etc || 0);
+          if (t.key === "dev") v = (day.dev || 0) + rmDev;
+          if (t.key === "dojin") v = (day.dojin || 0) + rmDojin;
+          if (t.key === "etc") v = (day.etc || 0) + rmEtc;
           monthTotals[t.key] += v;
         });
       }
@@ -278,9 +280,9 @@ function WorkStatsTab() {
       const base = (monthData && monthData[key]) || {};
       const rm = remoteManAll[key] || {};
       const comm = base.comm || 0, doodle = base.doodle || 0, doj = base.doj || 0, novel = base.novel || 0;
-      const dev = (base.dev || 0), etc = (base.etc || 0);
-      const total = (base.total || 0);
-      cells.push({ day: d, key, comm, doodle, doj, novel, dev, etc, total });
+      const dev = (base.dev || 0) + (rm.dev || 0), dojin = (base.dojin || 0) + (rm.dojin || 0), etc = (base.etc || 0) + (rm.etc || 0);
+      const total = (base.total || 0) + (rm.dev || 0) + (rm.dojin || 0) + (rm.etc || 0);
+      cells.push({ day: d, key, comm, doodle, doj, novel, dev, dojin, etc, total });
     }
     return cells;
   };
