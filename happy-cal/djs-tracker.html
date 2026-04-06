@@ -131,6 +131,17 @@
     border-radius: 20px;
     white-space: nowrap;
     letter-spacing: -0.2px;
+    cursor: pointer;
+    position: relative;
+  }
+  .manual-add-popup {
+    position: absolute; top: calc(100% + 6px); right: 0; background: var(--bg-card, var(--bg)); border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; gap: 6px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 100; white-space: nowrap;
+  }
+  .manual-add-popup input {
+    width: 70px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .manual-add-popup button {
+    padding: 5px 10px; border: none; border-radius: 6px; background: var(--accent); color: #fff; font-size: 12px; font-family: inherit; cursor: pointer;
   }
 
   .today-time.recording {
@@ -906,7 +917,7 @@
     </div>
   </div>
   <div class="header-actions">
-    <div class="today-time" id="todayTime" title="오늘 누적 작업시간">⏱ 0m</div>
+    <div class="today-time" id="todayTime" title="클릭하여 수동 추가" onclick="toggleManualAdd(event)">⏱ 0m<div class="manual-add-popup" id="manualAddPopup" style="display:none" onclick="event.stopPropagation()"><input type="number" id="manualMin" placeholder="분" onkeydown="if(event.key==='Enter')addManualTime()"><button onclick="addManualTime()">추가</button></div></div>
     <button class="btn" id="themeToggle" onclick="toggleTheme()" title="테마 전환">🌙</button>
     <button class="btn" onclick="exportData()">📁 내보내기</button>
     <button class="btn" onclick="document.getElementById('importFile').click()">📂 불러오기</button>
@@ -1222,6 +1233,22 @@ function notify(msg) {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function toggleManualAdd(e) {
+  const popup = document.getElementById('manualAddPopup');
+  const show = popup.style.display === 'none';
+  popup.style.display = show ? 'flex' : 'none';
+  if (show) { const inp = document.getElementById('manualMin'); inp.value = ''; inp.focus(); }
+}
+function addManualTime() {
+  const inp = document.getElementById('manualMin');
+  const mins = parseInt(inp.value);
+  if (!mins || mins <= 0) return;
+  logDailyTime(mins * 60);
+  notify(`+${mins}분 추가됨`);
+  inp.value = '';
+  document.getElementById('manualAddPopup').style.display = 'none';
+}
 
 // ========== VIEWS ==========
 function showView(name) {
