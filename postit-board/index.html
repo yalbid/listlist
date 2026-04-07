@@ -259,6 +259,7 @@ const firebaseApp = firebase.initializeApp({
   appId: "1:961264346042:web:35c85ff0a1c02ab2acb383"
 });
 const db = firebaseApp.firestore();
+db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 const auth = firebaseApp.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
