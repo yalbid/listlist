@@ -197,6 +197,20 @@ input { font-family:var(--font); }
 .note-color-dialogue { background:#B8E6B8; }
 .note-color-etc      { background:#E0D4F5; }
 
+/* 메모 이미지 */
+.note-image {
+  padding:4px 10px 6px; cursor:default;
+}
+.note-image img {
+  width:100%; border-radius:4px; display:block;
+}
+.note-image-remove {
+  position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+  background:rgba(0,0,0,0.5); color:white; font-size:10px; border:none;
+  display:none; align-items:center; justify-content:center; cursor:pointer;
+}
+.note-image:hover .note-image-remove { display:flex; }
+
 /* 색상 선택 바 */
 .note-colors {
   display:flex; gap:3px; padding:0 10px 6px; align-items:center;
@@ -336,6 +350,54 @@ const COLORS = [
   { id: 'dialogue', label: '대사' },
   { id: 'etc', label: '기타' },
 ];
+
+/* ── 이미지 리사이즈 (max 600x600, JPEG 압축) ── */
+const resizeImage = (file, maxSize = 600) => new Promise((resolve) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ── 자동 그룹핑 (거리 기반 클러스터링) ── */
+const autoGroup = (notes, threshold = 300) => {
+  const groups = [];
+  const visited = new Set();
+  notes.forEach(n => {
+    if (visited.has(n.id)) return;
+    const group = [n];
+    visited.add(n.id);
+    const queue = [n];
+    while (queue.length > 0) {
+      const cur = queue.shift();
+      notes.forEach(other => {
+        if (visited.has(other.id)) return;
+        const dx = (cur.x + 100) - (other.x + 100);
+        const dy = (cur.y + 60) - (other.y + 60);
+        if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+          visited.add(other.id);
+          group.push(other);
+          queue.push(other);
+        }
+      });
+    }
+    groups.push(group);
+  });
+  return groups;
+};
 
 /* ── 태그 추출 (#태그) ── */
 const extractTags = (text) => {
@@ -537,6 +599,20 @@ function Note({ note, scale, onUpdate, onDelete, dimmed }) {
     }
   };
 
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        const dataUrl = await resizeImage(file);
+        onUpdate(note.id, { image: dataUrl });
+        return;
+      }
+    }
+  };
+
   const colorClass = 'note-color-' + (note.color || 'etc');
   const tags = note.tags || [];
 
@@ -550,8 +626,16 @@ function Note({ note, scale, onUpdate, onDelete, dimmed }) {
           onMouseDown={e => e.stopPropagation()}
           onClick={() => onDelete(note.id)}>✕</button>
       </div>
+      {note.image && (
+        <div className="note-image" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+          style={{position:'relative'}}>
+          <img src={note.image} alt="" />
+          <button className="note-image-remove" onClick={() => onUpdate(note.id, { image: '' })}>✕</button>
+        </div>
+      )}
       <div ref={bodyRef} className="note-body" contentEditable suppressContentEditableWarning
-        onBlur={handleBlur} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+        onBlur={handleBlur} onPaste={handlePaste}
+        onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
       >{note.text}</div>
       <div className="note-colors" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
         {COLORS.map(c => (
@@ -692,6 +776,13 @@ function BoardView({ user, board, onBack }) {
         untagged.forEach(n => md += `- ${n.text}\n`);
         md += '\n';
       }
+    } else if (mode === 'byGroup') {
+      const groups = autoGroup(notes.filter(n => n.text));
+      groups.forEach((group, i) => {
+        md += `## 그룹 ${i + 1} (${group.length}개)\n`;
+        group.forEach(n => md += `- ${n.text}\n`);
+        md += '\n';
+      });
     }
     return md;
   };
@@ -804,6 +895,7 @@ function BoardView({ user, board, onBack }) {
             <button onClick={() => downloadMd('all')}>전체 내보내기</button>
             <button onClick={() => downloadMd('byColor')}>색상별 내보내기</button>
             <button onClick={() => downloadMd('byTag')}>태그별 내보내기</button>
+            <button onClick={() => downloadMd('byGroup')}>그룹별 내보내기</button>
           </div>
         )}
         {showAddMenu && (
