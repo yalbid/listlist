@@ -991,12 +991,20 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 // ========== Firebase 동기화 ==========
 const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
 const _fbDb=_fbApp.firestore();
+const _fbAuth=_fbApp.auth();
+let _fbReady=false;
+_fbAuth.onAuthStateChanged(u=>{
+  if(u){_fbReady=true;}
+  else{_fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>console.warn('Auth failed:',e));}
+});
 
 function _syncDojToFirebase() {
+  if(!_fbReady)return;
   try {
     // 작업시간
     _fbDb.collection('trackerSync').doc('doujinshi').set({
