@@ -29,8 +29,47 @@
   --radius: 12px;
   --font: 'Noto Sans KR', sans-serif;
 }
+[data-theme="dark"] {
+  --bg: #0F1523;
+  --bg-card: #1A2236;
+  --bg-hover: #1E2840;
+  --text: #E2E8F4;
+  --text-sub: #A0B0C8;
+  --text-muted: #5A6E88;
+  --accent: #B8A0E0;
+  --accent-hover: #D0BEF5;
+  --accent-light: #1E1A30;
+  --border: #2A3650;
+  --danger: #E06060;
+  --danger-hover: #C84040;
+  --shadow: rgba(0,4,16,0.3);
+}
+[data-theme="dark"] .note-color-person   { background:#C4A830; }
+[data-theme="dark"] .note-color-event    { background:#C45858; }
+[data-theme="dark"] .note-color-setting  { background:#4088A8; }
+[data-theme="dark"] .note-color-dialogue { background:#489858; }
+[data-theme="dark"] .note-color-etc      { background:#7860A8; }
+[data-theme="dark"] .color-dot.c-person   { background:#C4A830; }
+[data-theme="dark"] .color-dot.c-event    { background:#C45858; }
+[data-theme="dark"] .color-dot.c-setting  { background:#4088A8; }
+[data-theme="dark"] .color-dot.c-dialogue { background:#489858; }
+[data-theme="dark"] .color-dot.c-etc      { background:#7860A8; }
+[data-theme="dark"] .add-color-btn.c-person   { background:#C4A830; }
+[data-theme="dark"] .add-color-btn.c-event    { background:#C45858; }
+[data-theme="dark"] .add-color-btn.c-setting  { background:#4088A8; }
+[data-theme="dark"] .add-color-btn.c-dialogue { background:#489858; }
+[data-theme="dark"] .add-color-btn.c-etc      { background:#7860A8; }
+[data-theme="dark"] .note-header { color:rgba(255,255,255,0.4); }
+[data-theme="dark"] .note-del-btn { color:rgba(255,255,255,0.3); }
+[data-theme="dark"] .note-del-btn:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.6); }
+[data-theme="dark"] .note-body { color:rgba(255,255,255,0.8); }
+[data-theme="dark"] .note-body:empty::before { color:rgba(255,255,255,0.25); }
+[data-theme="dark"] .note-tag { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.5); }
+[data-theme="dark"] .color-dot.active { border-color:rgba(255,255,255,0.5); }
+[data-theme="dark"] .toast.warn { background:#3A3018; color:#E0C060; border-color:#5A4820; }
+[data-theme="dark"] .toast.alert { background:#381818; color:#F08080; border-color:#582020; }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; transition:background 0.3s, color 0.3s; }
 button { cursor:pointer; font-family:var(--font); border:none; }
 input { font-family:var(--font); }
 
@@ -935,6 +974,12 @@ function App() {
   const [checking, setChecking] = useState(true);
   const [err, setErr] = useState('');
   const [currentBoard, setCurrentBoard] = useState(null);
+  const [dark, setDark] = useState(() => localStorage.getItem('postit-dark') === 'true');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    localStorage.setItem('postit-dark', dark);
+  }, [dark]);
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(u => {
@@ -981,6 +1026,7 @@ function App() {
         </div>
         <div className="topbar-right">
           <span className="topbar-user">{user.displayName || user.email}</span>
+          <button className="topbar-btn" onClick={() => setDark(d => !d)}>{dark ? '라이트' : '다크'}</button>
           <button className="topbar-btn" onClick={doLogout}>로그아웃</button>
         </div>
       </div>
