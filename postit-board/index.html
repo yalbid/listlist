@@ -534,7 +534,7 @@ function BoardView({ user, board, onBack }) {
 
   const resetView = () => setCam({ x: 0, y: 0, zoom: 1 });
 
-  const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2];
+  const ZOOM_STEPS = [0.5, 0.75, 1];
   const cycleZoom = () => {
     setCam(c => {
       const rect = wrapRef.current.getBoundingClientRect();
