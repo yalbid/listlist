@@ -196,6 +196,52 @@ input { font-family:var(--font); }
 .note-color-setting  { background:#A0D8EF; }
 .note-color-dialogue { background:#B8E6B8; }
 .note-color-etc      { background:#E0D4F5; }
+
+/* 색상 선택 바 */
+.note-colors {
+  display:flex; gap:3px; padding:0 10px 6px; align-items:center;
+}
+.color-dot {
+  width:16px; height:16px; border-radius:50%; border:2px solid transparent;
+  cursor:pointer; transition:all 0.15s; flex-shrink:0;
+}
+.color-dot:hover { transform:scale(1.2); }
+.color-dot.active { border-color:rgba(0,0,0,0.4); transform:scale(1.15); }
+.color-dot.c-person   { background:#FFEB8A; }
+.color-dot.c-event    { background:#FF9E9E; }
+.color-dot.c-setting  { background:#A0D8EF; }
+.color-dot.c-dialogue { background:#B8E6B8; }
+.color-dot.c-etc      { background:#E0D4F5; }
+
+/* 태그 표시 */
+.note-tags {
+  display:flex; flex-wrap:wrap; gap:3px; padding:0 10px 8px;
+}
+.note-tag {
+  font-size:11px; padding:1px 6px; border-radius:4px;
+  background:rgba(0,0,0,0.08); color:rgba(0,0,0,0.5);
+}
+
+/* 메모 추가 시 색상 선택 */
+.add-menu {
+  position:absolute; top:12px; left:12px; z-index:20;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:10px;
+  padding:10px 14px; box-shadow:0 4px 16px var(--shadow);
+  display:flex; flex-direction:column; gap:6px;
+}
+.add-menu-label { font-size:12px; color:var(--text-sub); font-weight:500; }
+.add-menu-colors { display:flex; gap:6px; }
+.add-color-btn {
+  width:32px; height:32px; border-radius:8px; border:2px solid transparent;
+  cursor:pointer; transition:all 0.15s; display:flex; align-items:center;
+  justify-content:center; font-size:11px; color:rgba(0,0,0,0.45); font-weight:500;
+}
+.add-color-btn:hover { border-color:rgba(0,0,0,0.3); transform:scale(1.08); }
+.add-color-btn.c-person   { background:#FFEB8A; }
+.add-color-btn.c-event    { background:#FF9E9E; }
+.add-color-btn.c-setting  { background:#A0D8EF; }
+.add-color-btn.c-dialogue { background:#B8E6B8; }
+.add-color-btn.c-etc      { background:#E0D4F5; }
 </style>
 </head>
 <body>
@@ -218,6 +264,21 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 // ★ 처음 로그인 후 콘솔에 표시되는 UID를 여기에 붙여넣으세요
 const OWNER_UID = "MGKoQI29bWUFLXMKCvSysNYCtqm2";
+
+/* ── 색상 목록 ── */
+const COLORS = [
+  { id: 'person', label: '인물' },
+  { id: 'event', label: '사건' },
+  { id: 'setting', label: '설정' },
+  { id: 'dialogue', label: '대사' },
+  { id: 'etc', label: '기타' },
+];
+
+/* ── 태그 추출 (#태그) ── */
+const extractTags = (text) => {
+  const matches = text.match(/#[^\s#]+/g);
+  return matches ? [...new Set(matches.map(t => t.slice(1)))] : [];
+};
 
 /* ── 날짜 포맷 ── */
 const fmtDate = (ts) => {
@@ -408,11 +469,13 @@ function Note({ note, scale, onUpdate, onDelete }) {
   const handleBlur = () => {
     const newText = bodyRef.current.innerText;
     if (newText !== note.text) {
-      onUpdate(note.id, { text: newText });
+      const tags = extractTags(newText);
+      onUpdate(note.id, { text: newText, tags });
     }
   };
 
   const colorClass = 'note-color-' + (note.color || 'etc');
+  const tags = note.tags || [];
 
   return (
     <div ref={noteRef} className={`note ${colorClass}`}
@@ -427,6 +490,17 @@ function Note({ note, scale, onUpdate, onDelete }) {
       <div ref={bodyRef} className="note-body" contentEditable suppressContentEditableWarning
         onBlur={handleBlur} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
       >{note.text}</div>
+      <div className="note-colors" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+        {COLORS.map(c => (
+          <div key={c.id} className={`color-dot c-${c.id} ${note.color === c.id ? 'active' : ''}`}
+            title={c.label} onClick={() => onUpdate(note.id, { color: c.id })} />
+        ))}
+      </div>
+      {tags.length > 0 && (
+        <div className="note-tags">
+          {tags.map(t => <span key={t} className="note-tag">#{t}</span>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -503,20 +577,22 @@ function BoardView({ user, board, onBack }) {
     return () => el?.removeEventListener('wheel', handleWheel);
   }, []);
 
+  const [showAddMenu, setShowAddMenu] = useState(false);
+
   // 메모 추가
-  const addNote = () => {
+  const addNote = (color) => {
     const rect = wrapRef.current.getBoundingClientRect();
     const cx = (rect.width / 2 - cam.x) / cam.zoom;
     const cy = (rect.height / 2 - cam.y) / cam.zoom;
     const now = firebase.firestore.FieldValue.serverTimestamp();
     notesRef.add({
-      text: '', color: 'etc',
+      text: '', color: color || 'etc',
       x: Math.round(cx - 100), y: Math.round(cy - 60),
       tags: [], createdAt: now, updatedAt: now
     });
-    // 보드 수정일도 갱신
     db.collection('users').doc(user.uid).collection('postit_boards').doc(board.id)
       .update({ updatedAt: now });
+    setShowAddMenu(false);
   };
 
   // 메모 수정
@@ -557,10 +633,21 @@ function BoardView({ user, board, onBack }) {
         onMouseDown={startPan} onTouchStart={startPan}>
         <div className="canvas-toolbar">
           <button onClick={onBack}>← 목록</button>
-          <button onClick={addNote}>+ 메모</button>
+          <button onClick={() => setShowAddMenu(v => !v)}>+ 메모</button>
           <button onClick={resetView}>맞추기</button>
           <button className="zoom-display" onClick={cycleZoom} style={{cursor:'pointer'}}>{Math.round(cam.zoom * 100)}%</button>
         </div>
+        {showAddMenu && (
+          <div className="add-menu" style={{top:50, left:12}}>
+            <div className="add-menu-label">색상을 선택하세요</div>
+            <div className="add-menu-colors">
+              {COLORS.map(c => (
+                <button key={c.id} className={`add-color-btn c-${c.id}`}
+                  onClick={() => addNote(c.id)}>{c.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div ref={canvasRef} className="canvas"
           style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})` }}>
           {notes.map(n => (
