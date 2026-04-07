@@ -534,6 +534,21 @@ function BoardView({ user, board, onBack }) {
 
   const resetView = () => setCam({ x: 0, y: 0, zoom: 1 });
 
+  const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2];
+  const cycleZoom = () => {
+    setCam(c => {
+      const rect = wrapRef.current.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const curIdx = ZOOM_STEPS.findIndex(z => z >= c.zoom - 0.01);
+      const nextIdx = (curIdx + 1) % ZOOM_STEPS.length;
+      const newZoom = ZOOM_STEPS[nextIdx];
+      const newX = cx - (cx - c.x) * (newZoom / c.zoom);
+      const newY = cy - (cy - c.y) * (newZoom / c.zoom);
+      return { x: newX, y: newY, zoom: newZoom };
+    });
+  };
+
   if (loading) return <div className="loading">불러오는 중...</div>;
 
   return (
@@ -544,7 +559,7 @@ function BoardView({ user, board, onBack }) {
           <button onClick={onBack}>← 목록</button>
           <button onClick={addNote}>+ 메모</button>
           <button onClick={resetView}>맞추기</button>
-          <span className="zoom-display">{Math.round(cam.zoom * 100)}%</span>
+          <button className="zoom-display" onClick={cycleZoom} style={{cursor:'pointer'}}>{Math.round(cam.zoom * 100)}%</button>
         </div>
         <div ref={canvasRef} className="canvas"
           style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})` }}>
