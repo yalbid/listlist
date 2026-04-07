@@ -242,6 +242,44 @@ input { font-family:var(--font); }
 .add-color-btn.c-setting  { background:#A0D8EF; }
 .add-color-btn.c-dialogue { background:#B8E6B8; }
 .add-color-btn.c-etc      { background:#E0D4F5; }
+
+/* 필터 바 */
+.filter-bar {
+  position:absolute; top:12px; right:12px; z-index:10;
+  display:flex; gap:6px; align-items:center;
+}
+.filter-bar input {
+  padding:6px 10px; border-radius:8px; font-size:13px; border:1px solid var(--border);
+  background:var(--bg-card); outline:none; width:140px; box-shadow:0 2px 8px var(--shadow);
+  transition:border 0.2s;
+}
+.filter-bar input:focus { border-color:var(--accent); }
+.filter-btn {
+  padding:6px 10px; border-radius:8px; font-size:12px; font-weight:500;
+  background:var(--bg-card); color:var(--text-sub); border:1px solid var(--border);
+  transition:all 0.2s; box-shadow:0 2px 8px var(--shadow); cursor:pointer;
+}
+.filter-btn:hover { border-color:var(--accent); color:var(--accent); }
+.filter-btn.active { background:var(--accent); color:white; border-color:var(--accent); }
+.filter-dropdown {
+  position:absolute; top:40px; right:0; z-index:20;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:10px;
+  padding:10px; box-shadow:0 4px 16px var(--shadow); min-width:180px;
+}
+.filter-section { margin-bottom:8px; }
+.filter-section:last-child { margin-bottom:0; }
+.filter-section-title { font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:4px; }
+.filter-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.filter-chip {
+  padding:3px 8px; border-radius:6px; font-size:11px; cursor:pointer;
+  border:1px solid var(--border); background:var(--bg); color:var(--text-sub);
+  transition:all 0.15s;
+}
+.filter-chip:hover { border-color:var(--accent); }
+.filter-chip.active { background:var(--accent-light); border-color:var(--accent); color:var(--accent); font-weight:600; }
+
+/* 흐리게 처리 */
+.note.dimmed { opacity:0.2; pointer-events:none; }
 </style>
 </head>
 <body>
@@ -421,7 +459,7 @@ function BoardList({ user, onOpenBoard }) {
 }
 
 /* ── 포스트잇 메모 ── */
-function Note({ note, scale, onUpdate, onDelete }) {
+function Note({ note, scale, onUpdate, onDelete, dimmed }) {
   const noteRef = useRef(null);
   const bodyRef = useRef(null);
   const dragState = useRef(null);
@@ -479,7 +517,7 @@ function Note({ note, scale, onUpdate, onDelete }) {
   const tags = note.tags || [];
 
   return (
-    <div ref={noteRef} className={`note ${colorClass}`}
+    <div ref={noteRef} className={`note ${colorClass} ${dimmed ? 'dimmed' : ''}`}
       style={{ left: note.x, top: note.y }}
       onMouseDown={startDrag} onTouchStart={startDrag}>
       <div className="note-header">
@@ -579,6 +617,22 @@ function BoardView({ user, board, onBack }) {
   }, []);
 
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [filterColor, setFilterColor] = useState(null);
+  const [filterTag, setFilterTag] = useState(null);
+  const [showFilter, setShowFilter] = useState(false);
+
+  const allTags = [...new Set(notes.flatMap(n => n.tags || []))].sort();
+  const hasFilter = searchText || filterColor || filterTag;
+
+  const isMatch = (n) => {
+    if (filterColor && n.color !== filterColor) return false;
+    if (filterTag && !(n.tags || []).includes(filterTag)) return false;
+    if (searchText && !(n.text || '').toLowerCase().includes(searchText.toLowerCase())) return false;
+    return true;
+  };
+
+  const clearFilters = () => { setSearchText(''); setFilterColor(null); setFilterTag(null); };
 
   // 메모 추가
   const addNote = (color) => {
@@ -638,6 +692,37 @@ function BoardView({ user, board, onBack }) {
           <button onClick={resetView}>맞추기</button>
           <button className="zoom-display" onClick={cycleZoom} style={{cursor:'pointer'}}>{Math.round(cam.zoom * 100)}%</button>
         </div>
+        <div className="filter-bar">
+          <input placeholder="검색..." value={searchText}
+            onChange={e => setSearchText(e.target.value)} />
+          <button className={`filter-btn ${showFilter ? 'active' : ''}`}
+            onClick={() => setShowFilter(v => !v)}>필터</button>
+          {hasFilter && <button className="filter-btn" onClick={clearFilters}>초기화</button>}
+          {showFilter && (
+            <div className="filter-dropdown">
+              <div className="filter-section">
+                <div className="filter-section-title">색상</div>
+                <div className="filter-chips">
+                  {COLORS.map(c => (
+                    <span key={c.id} className={`filter-chip ${filterColor === c.id ? 'active' : ''}`}
+                      onClick={() => setFilterColor(filterColor === c.id ? null : c.id)}>{c.label}</span>
+                  ))}
+                </div>
+              </div>
+              {allTags.length > 0 && (
+                <div className="filter-section">
+                  <div className="filter-section-title">태그</div>
+                  <div className="filter-chips">
+                    {allTags.map(t => (
+                      <span key={t} className={`filter-chip ${filterTag === t ? 'active' : ''}`}
+                        onClick={() => setFilterTag(filterTag === t ? null : t)}>#{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {showAddMenu && (
           <div className="add-menu" style={{top:50, left:12}}>
             <div className="add-menu-label">색상을 선택하세요</div>
@@ -653,7 +738,8 @@ function BoardView({ user, board, onBack }) {
           style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})` }}>
           {notes.map(n => (
             <Note key={n.id} note={n} scale={cam.zoom}
-              onUpdate={updateNote} onDelete={deleteNote} />
+              onUpdate={updateNote} onDelete={deleteNote}
+              dimmed={hasFilter && !isMatch(n)} />
           ))}
         </div>
       </div>
