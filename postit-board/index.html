@@ -132,6 +132,70 @@ input { font-family:var(--font); }
 
 /* 로딩 */
 .loading { display:flex; align-items:center; justify-content:center; height:100vh; color:var(--text-muted); font-size:14px; }
+
+/* 캔버스 */
+.canvas-wrap {
+  position:relative; flex:1; overflow:hidden; height:calc(100vh - 49px);
+  background:var(--bg); cursor:grab;
+}
+.canvas-wrap.grabbing { cursor:grabbing; }
+.canvas {
+  position:absolute; top:0; left:0; width:0; height:0;
+  transform-origin:0 0;
+}
+
+/* 캔버스 툴바 */
+.canvas-toolbar {
+  position:absolute; top:12px; left:12px; z-index:10;
+  display:flex; gap:6px; align-items:center;
+}
+.canvas-toolbar button {
+  padding:6px 12px; border-radius:8px; font-size:13px; font-weight:500;
+  background:var(--bg-card); color:var(--text-sub); border:1px solid var(--border);
+  transition:all 0.2s; box-shadow:0 2px 8px var(--shadow);
+}
+.canvas-toolbar button:hover { border-color:var(--accent); color:var(--accent); }
+.zoom-display {
+  font-size:12px; color:var(--text-muted); background:var(--bg-card);
+  padding:4px 10px; border-radius:6px; border:1px solid var(--border);
+  box-shadow:0 2px 8px var(--shadow);
+}
+
+/* 포스트잇 */
+.note {
+  position:absolute; width:200px; min-height:120px;
+  border-radius:4px; box-shadow:2px 3px 12px rgba(0,0,0,0.1);
+  display:flex; flex-direction:column; cursor:grab; user-select:none;
+  transition:box-shadow 0.2s;
+}
+.note:hover { box-shadow:3px 5px 18px rgba(0,0,0,0.15); }
+.note.dragging { box-shadow:5px 8px 24px rgba(0,0,0,0.2); z-index:100; cursor:grabbing; }
+.note-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 10px 4px; font-size:11px; color:rgba(0,0,0,0.4);
+}
+.note-del-btn {
+  width:20px; height:20px; border-radius:4px; background:transparent;
+  color:rgba(0,0,0,0.3); font-size:12px; display:flex; align-items:center;
+  justify-content:center; opacity:0; transition:all 0.15s;
+}
+.note:hover .note-del-btn { opacity:1; }
+.note-del-btn:hover { background:rgba(0,0,0,0.1); color:rgba(0,0,0,0.6); }
+.note-body {
+  flex:1; padding:4px 10px 10px; font-size:13px; line-height:1.5;
+  white-space:pre-wrap; word-break:break-word; color:rgba(0,0,0,0.75);
+  outline:none; cursor:text;
+}
+.note-body:empty::before {
+  content:'메모를 입력하세요'; color:rgba(0,0,0,0.25); font-style:italic;
+}
+
+/* 포스트잇 색상 */
+.note-color-person   { background:#FFEB8A; }
+.note-color-event    { background:#FF9E9E; }
+.note-color-setting  { background:#A0D8EF; }
+.note-color-dialogue { background:#B8E6B8; }
+.note-color-etc      { background:#E0D4F5; }
 </style>
 </head>
 <body>
@@ -294,15 +358,202 @@ function BoardList({ user, onOpenBoard }) {
   );
 }
 
-/* ── 보드 상세 화면 (MVP2에서 캔버스 추가 예정) ── */
-function BoardView({ user, board, onBack }) {
+/* ── 포스트잇 메모 ── */
+function Note({ note, scale, onUpdate, onDelete }) {
+  const noteRef = useRef(null);
+  const bodyRef = useRef(null);
+  const dragState = useRef(null);
+
+  const startDrag = (e) => {
+    if (e.target === bodyRef.current || bodyRef.current?.contains(e.target)) return;
+    e.stopPropagation();
+    const el = noteRef.current;
+    el.classList.add('dragging');
+    const startX = (e.clientX || e.touches?.[0]?.clientX) / scale;
+    const startY = (e.clientY || e.touches?.[0]?.clientY) / scale;
+    dragState.current = { startX, startY, origX: note.x, origY: note.y };
+
+    const onMove = (ev) => {
+      ev.preventDefault();
+      const cx = (ev.clientX || ev.touches?.[0]?.clientX) / scale;
+      const cy = (ev.clientY || ev.touches?.[0]?.clientY) / scale;
+      const dx = cx - dragState.current.startX;
+      const dy = cy - dragState.current.startY;
+      el.style.left = (dragState.current.origX + dx) + 'px';
+      el.style.top = (dragState.current.origY + dy) + 'px';
+    };
+    const onUp = (ev) => {
+      el.classList.remove('dragging');
+      const cx = (ev.clientX || ev.changedTouches?.[0]?.clientX) / scale;
+      const cy = (ev.clientY || ev.changedTouches?.[0]?.clientY) / scale;
+      const dx = cx - dragState.current.startX;
+      const dy = cy - dragState.current.startY;
+      const newX = Math.round(dragState.current.origX + dx);
+      const newY = Math.round(dragState.current.origY + dy);
+      if (newX !== note.x || newY !== note.y) {
+        onUpdate(note.id, { x: newX, y: newY });
+      }
+      dragState.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+
+  const handleBlur = () => {
+    const newText = bodyRef.current.innerText;
+    if (newText !== note.text) {
+      onUpdate(note.id, { text: newText });
+    }
+  };
+
+  const colorClass = 'note-color-' + (note.color || 'etc');
+
   return (
-    <div style={{padding:24}}>
-      <button className="topbar-btn" onClick={onBack} style={{marginBottom:16}}>← 목록으로</button>
-      <h2 style={{fontSize:20,fontWeight:700}}>{board.title}</h2>
-      <p style={{color:'var(--text-muted)',fontSize:14,marginTop:8}}>
-        메모 기능은 다음 단계에서 추가됩니다.
-      </p>
+    <div ref={noteRef} className={`note ${colorClass}`}
+      style={{ left: note.x, top: note.y }}
+      onMouseDown={startDrag} onTouchStart={startDrag}>
+      <div className="note-header">
+        <span>{fmtDate(note.createdAt)}</span>
+        <button className="note-del-btn" title="삭제"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={() => onDelete(note.id)}>✕</button>
+      </div>
+      <div ref={bodyRef} className="note-body" contentEditable suppressContentEditableWarning
+        onBlur={handleBlur} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+      >{note.text}</div>
+    </div>
+  );
+}
+
+/* ── 보드 상세 화면 (무한 캔버스) ── */
+function BoardView({ user, board, onBack }) {
+  const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
+  const panState = useRef(null);
+  const [cam, setCam] = useState({ x: 0, y: 0, zoom: 1 });
+
+  const notesRef = db.collection('users').doc(user.uid)
+    .collection('postit_boards').doc(board.id).collection('notes');
+
+  useEffect(() => {
+    const unsub = notesRef.orderBy('createdAt').onSnapshot(snap => {
+      setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [board.id]);
+
+  // 캔버스 팬(이동)
+  const startPan = (e) => {
+    if (e.target !== wrapRef.current && e.target !== canvasRef.current) return;
+    e.preventDefault();
+    wrapRef.current.classList.add('grabbing');
+    const cx = e.clientX || e.touches?.[0]?.clientX;
+    const cy = e.clientY || e.touches?.[0]?.clientY;
+    panState.current = { startX: cx, startY: cy, origX: cam.x, origY: cam.y };
+
+    const onMove = (ev) => {
+      ev.preventDefault();
+      const mx = ev.clientX || ev.touches?.[0]?.clientX;
+      const my = ev.clientY || ev.touches?.[0]?.clientY;
+      const dx = mx - panState.current.startX;
+      const dy = my - panState.current.startY;
+      setCam(c => ({ ...c, x: panState.current.origX + dx, y: panState.current.origY + dy }));
+    };
+    const onUp = () => {
+      wrapRef.current?.classList.remove('grabbing');
+      panState.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+
+  // 줌
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setCam(c => {
+      const newZoom = Math.min(Math.max(c.zoom * delta, 0.3), 3);
+      const rect = wrapRef.current.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const newX = mx - (mx - c.x) * (newZoom / c.zoom);
+      const newY = my - (my - c.y) * (newZoom / c.zoom);
+      return { x: newX, y: newY, zoom: newZoom };
+    });
+  };
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (el) el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el?.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // 메모 추가
+  const addNote = () => {
+    const rect = wrapRef.current.getBoundingClientRect();
+    const cx = (rect.width / 2 - cam.x) / cam.zoom;
+    const cy = (rect.height / 2 - cam.y) / cam.zoom;
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    notesRef.add({
+      text: '', color: 'etc',
+      x: Math.round(cx - 100), y: Math.round(cy - 60),
+      tags: [], createdAt: now, updatedAt: now
+    });
+    // 보드 수정일도 갱신
+    db.collection('users').doc(user.uid).collection('postit_boards').doc(board.id)
+      .update({ updatedAt: now });
+  };
+
+  // 메모 수정
+  const updateNote = (noteId, data) => {
+    data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    notesRef.doc(noteId).update(data);
+    db.collection('users').doc(user.uid).collection('postit_boards').doc(board.id)
+      .update({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  };
+
+  // 메모 삭제
+  const deleteNote = (noteId) => {
+    notesRef.doc(noteId).delete();
+  };
+
+  const resetView = () => setCam({ x: 0, y: 0, zoom: 1 });
+
+  if (loading) return <div className="loading">불러오는 중...</div>;
+
+  return (
+    <div>
+      <div className="canvas-wrap" ref={wrapRef}
+        onMouseDown={startPan} onTouchStart={startPan}>
+        <div className="canvas-toolbar">
+          <button onClick={onBack}>← 목록</button>
+          <button onClick={addNote}>+ 메모</button>
+          <button onClick={resetView}>맞추기</button>
+          <span className="zoom-display">{Math.round(cam.zoom * 100)}%</span>
+        </div>
+        <div ref={canvasRef} className="canvas"
+          style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})` }}>
+          {notes.map(n => (
+            <Note key={n.id} note={n} scale={cam.zoom}
+              onUpdate={updateNote} onDelete={deleteNote} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -355,7 +606,7 @@ function App() {
     <div>
       <div className="topbar">
         <div className="topbar-title" style={{cursor:'pointer'}} onClick={() => setCurrentBoard(null)}>
-          포스트잇 보드
+          포스트잇 보드{currentBoard ? ` / ${currentBoard.title}` : ''}
         </div>
         <div className="topbar-right">
           <span className="topbar-user">{user.displayName || user.email}</span>
