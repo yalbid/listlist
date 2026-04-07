@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포스트잇 보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F5F0EB;
+  --bg-card: #FFFFFF;
+  --bg-hover: #FFF8F2;
+  --text: #3D2E1F;
+  --text-sub: #7A6555;
+  --text-muted: #B09A85;
+  --accent: #E8945A;
+  --accent-hover: #D4803F;
+  --accent-light: #FFF0E3;
+  --border: #EDE0D1;
+  --danger: #D45B5B;
+  --danger-hover: #C04040;
+  --shadow: rgba(61,46,31,0.08);
+  --radius: 12px;
+  --font: 'Noto Sans KR', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; }
+button { cursor:pointer; font-family:var(--font); border:none; }
+input { font-family:var(--font); }
+
+/* 로그인 화면 */
+.login-screen {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  height:100vh; gap:20px;
+}
+.login-screen h1 { font-size:28px; font-weight:700; }
+.login-screen p { color:var(--text-sub); font-size:14px; }
+.login-btn {
+  padding:12px 32px; background:var(--accent); color:white; border-radius:var(--radius);
+  font-size:15px; font-weight:600; transition:background 0.2s;
+}
+.login-btn:hover { background:var(--accent-hover); }
+.login-error { color:var(--danger); font-size:13px; max-width:320px; text-align:center; }
+
+/* 상단 바 */
+.topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 24px; background:var(--bg-card); border-bottom:1px solid var(--border);
+}
+.topbar-title { font-size:18px; font-weight:700; }
+.topbar-right { display:flex; align-items:center; gap:12px; }
+.topbar-user { font-size:13px; color:var(--text-sub); }
+.topbar-btn {
+  padding:6px 14px; border-radius:8px; font-size:13px; font-weight:500;
+  background:var(--bg); color:var(--text-sub); transition:all 0.2s;
+}
+.topbar-btn:hover { background:var(--border); }
+
+/* 보드 목록 */
+.board-list {
+  max-width:720px; margin:40px auto; padding:0 20px;
+}
+.board-list-header {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;
+}
+.board-list-header h2 { font-size:22px; font-weight:700; }
+.add-board-btn {
+  padding:10px 20px; background:var(--accent); color:white; border-radius:var(--radius);
+  font-size:14px; font-weight:600; transition:background 0.2s;
+}
+.add-board-btn:hover { background:var(--accent-hover); }
+
+.board-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px;
+}
+.board-card {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:20px; cursor:pointer; transition:all 0.2s; position:relative;
+}
+.board-card:hover { border-color:var(--accent); box-shadow:0 4px 16px var(--shadow); transform:translateY(-2px); }
+.board-card-title { font-size:16px; font-weight:600; margin-bottom:8px; word-break:break-word; }
+.board-card-meta { font-size:12px; color:var(--text-muted); }
+.board-card-actions {
+  position:absolute; top:12px; right:12px; display:none; gap:4px;
+}
+.board-card:hover .board-card-actions { display:flex; }
+.board-action-btn {
+  width:28px; height:28px; border-radius:6px; background:var(--bg);
+  color:var(--text-sub); font-size:13px; display:flex; align-items:center; justify-content:center;
+  transition:all 0.2s;
+}
+.board-action-btn:hover { background:var(--accent-light); color:var(--accent); }
+.board-action-btn.danger:hover { background:#FDE8E8; color:var(--danger); }
+
+.empty-state {
+  text-align:center; padding:60px 20px; color:var(--text-muted);
+}
+.empty-state p { font-size:15px; margin-bottom:8px; }
+.empty-state span { font-size:13px; }
+
+/* 모달 */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(61,46,31,0.3); display:flex;
+  align-items:center; justify-content:center; z-index:1000;
+}
+.modal {
+  background:var(--bg-card); border-radius:var(--radius); padding:24px;
+  width:90%; max-width:400px; box-shadow:0 8px 32px var(--shadow);
+}
+.modal h3 { font-size:17px; font-weight:600; margin-bottom:16px; }
+.modal-input {
+  width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px;
+  font-size:14px; outline:none; background:var(--bg); transition:border 0.2s;
+}
+.modal-input:focus { border-color:var(--accent); }
+.modal-btns { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.modal-btn {
+  padding:8px 18px; border-radius:8px; font-size:13px; font-weight:500; transition:all 0.2s;
+}
+.modal-btn.primary { background:var(--accent); color:white; }
+.modal-btn.primary:hover { background:var(--accent-hover); }
+.modal-btn.cancel { background:var(--bg); color:var(--text-sub); }
+.modal-btn.cancel:hover { background:var(--border); }
+.modal-btn.danger { background:var(--danger); color:white; }
+.modal-btn.danger:hover { background:var(--danger-hover); }
+
+/* 로딩 */
+.loading { display:flex; align-items:center; justify-content:center; height:100vh; color:var(--text-muted); font-size:14px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ── Firebase 초기화 ── */
+const firebaseApp = firebase.initializeApp({
+  apiKey: "AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",
+  authDomain: "happycalendar-1dd07.firebaseapp.com",
+  projectId: "happycalendar-1dd07",
+  storageBucket: "happycalendar-1dd07.firebasestorage.app",
+  messagingSenderId: "961264346042",
+  appId: "1:961264346042:web:35c85ff0a1c02ab2acb383"
+});
+const db = firebaseApp.firestore();
+const auth = firebaseApp.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+// ★ 처음 로그인 후 콘솔에 표시되는 UID를 여기에 붙여넣으세요
+const OWNER_UID = null;
+
+/* ── 날짜 포맷 ── */
+const fmtDate = (ts) => {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+};
+
+/* ── 모달 컴포넌트 ── */
+function Modal({ title, children, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h3>{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ── 보드 목록 화면 ── */
+function BoardList({ user, onOpenBoard }) {
+  const [boards, setBoards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [editBoard, setEditBoard] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const boardsRef = db.collection('users').doc(user.uid).collection('postit_boards');
+
+  useEffect(() => {
+    const unsub = boardsRef.orderBy('updatedAt', 'desc').onSnapshot(snap => {
+      setBoards(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [user.uid]);
+
+  const addBoard = async () => {
+    const title = newTitle.trim();
+    if (!title) return;
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    await boardsRef.add({ title, createdAt: now, updatedAt: now });
+    setNewTitle('');
+    setShowAdd(false);
+  };
+
+  const updateBoard = async () => {
+    const title = editTitle.trim();
+    if (!title || !editBoard) return;
+    await boardsRef.doc(editBoard.id).update({ title, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    setEditBoard(null);
+  };
+
+  const deleteBoard = async () => {
+    if (!deleteTarget) return;
+    // 하위 notes 컬렉션도 삭제
+    const notes = await boardsRef.doc(deleteTarget.id).collection('notes').get();
+    const batch = db.batch();
+    notes.docs.forEach(doc => batch.delete(doc.ref));
+    batch.delete(boardsRef.doc(deleteTarget.id));
+    await batch.commit();
+    setDeleteTarget(null);
+  };
+
+  if (loading) return <div className="loading">불러오는 중...</div>;
+
+  return (
+    <div className="board-list">
+      <div className="board-list-header">
+        <h2>내 보드</h2>
+        <button className="add-board-btn" onClick={() => setShowAdd(true)}>+ 새 보드</button>
+      </div>
+
+      {boards.length === 0 ? (
+        <div className="empty-state">
+          <p>아직 보드가 없습니다</p>
+          <span>새 보드를 만들어 메모를 흩뿌려 보세요</span>
+        </div>
+      ) : (
+        <div className="board-grid">
+          {boards.map(b => (
+            <div key={b.id} className="board-card" onClick={() => onOpenBoard(b)}>
+              <div className="board-card-actions">
+                <button className="board-action-btn" title="이름 변경"
+                  onClick={e => { e.stopPropagation(); setEditBoard(b); setEditTitle(b.title); }}>✏</button>
+                <button className="board-action-btn danger" title="삭제"
+                  onClick={e => { e.stopPropagation(); setDeleteTarget(b); }}>✕</button>
+              </div>
+              <div className="board-card-title">{b.title}</div>
+              <div className="board-card-meta">
+                생성 {fmtDate(b.createdAt)} · 수정 {fmtDate(b.updatedAt)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title="새 보드 만들기" onClose={() => setShowAdd(false)}>
+          <input className="modal-input" placeholder="보드 제목" autoFocus
+            value={newTitle} onChange={e => setNewTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addBoard()} />
+          <div className="modal-btns">
+            <button className="modal-btn cancel" onClick={() => setShowAdd(false)}>취소</button>
+            <button className="modal-btn primary" onClick={addBoard}>만들기</button>
+          </div>
+        </Modal>
+      )}
+
+      {editBoard && (
+        <Modal title="보드 이름 변경" onClose={() => setEditBoard(null)}>
+          <input className="modal-input" autoFocus
+            value={editTitle} onChange={e => setEditTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && updateBoard()} />
+          <div className="modal-btns">
+            <button className="modal-btn cancel" onClick={() => setEditBoard(null)}>취소</button>
+            <button className="modal-btn primary" onClick={updateBoard}>변경</button>
+          </div>
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <Modal title="보드 삭제" onClose={() => setDeleteTarget(null)}>
+          <p style={{fontSize:'14px',color:'var(--text-sub)',marginBottom:4}}>
+            <strong>"{deleteTarget.title}"</strong> 보드와 안의 모든 메모가 삭제됩니다.
+          </p>
+          <p style={{fontSize:'13px',color:'var(--danger)'}}>이 작업은 되돌릴 수 없습니다.</p>
+          <div className="modal-btns">
+            <button className="modal-btn cancel" onClick={() => setDeleteTarget(null)}>취소</button>
+            <button className="modal-btn danger" onClick={deleteBoard}>삭제</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ── 보드 상세 화면 (MVP2에서 캔버스 추가 예정) ── */
+function BoardView({ user, board, onBack }) {
+  return (
+    <div style={{padding:24}}>
+      <button className="topbar-btn" onClick={onBack} style={{marginBottom:16}}>← 목록으로</button>
+      <h2 style={{fontSize:20,fontWeight:700}}>{board.title}</h2>
+      <p style={{color:'var(--text-muted)',fontSize:14,marginTop:8}}>
+        메모 기능은 다음 단계에서 추가됩니다.
+      </p>
+    </div>
+  );
+}
+
+/* ── 앱 루트 ── */
+function App() {
+  const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true);
+  const [err, setErr] = useState('');
+  const [currentBoard, setCurrentBoard] = useState(null);
+
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(u => {
+      if (u && OWNER_UID && u.uid !== OWNER_UID) {
+        setErr('접근 권한이 없습니다.');
+        auth.signOut();
+        setUser(null);
+      } else {
+        setUser(u);
+        if (u) console.log('UID:', u.uid);
+      }
+      setChecking(false);
+    });
+    return unsub;
+  }, []);
+
+  const doLogin = () => {
+    setErr('');
+    auth.signInWithPopup(googleProvider).catch(e => {
+      setErr(e.code === 'auth/operation-not-allowed'
+        ? 'Firebase 콘솔에서 Google 로그인을 활성화해주세요'
+        : '로그인에 실패했습니다. 팝업 차단을 확인해주세요.');
+    });
+  };
+
+  const doLogout = () => { auth.signOut(); setCurrentBoard(null); };
+
+  if (checking) return <div className="loading">확인 중...</div>;
+
+  if (!user) return (
+    <div className="login-screen">
+      <h1>포스트잇 보드</h1>
+      <p>웹소설 초안을 위한 자유 메모 도구</p>
+      <button className="login-btn" onClick={doLogin}>Google로 로그인</button>
+      {err && <div className="login-error">{err}</div>}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="topbar">
+        <div className="topbar-title" style={{cursor:'pointer'}} onClick={() => setCurrentBoard(null)}>
+          포스트잇 보드
+        </div>
+        <div className="topbar-right">
+          <span className="topbar-user">{user.displayName || user.email}</span>
+          <button className="topbar-btn" onClick={doLogout}>로그아웃</button>
+        </div>
+      </div>
+      {currentBoard
+        ? <BoardView user={user} board={currentBoard} onBack={() => setCurrentBoard(null)} />
+        : <BoardList user={user} onOpenBoard={b => setCurrentBoard(b)} />
+      }
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
