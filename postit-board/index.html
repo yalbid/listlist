@@ -292,6 +292,16 @@ input { font-family:var(--font); }
 }
 .export-menu button:hover { background:var(--accent-light); color:var(--accent); }
 
+/* 토스트 */
+.toast {
+  position:absolute; bottom:20px; left:50%; transform:translateX(-50%); z-index:30;
+  padding:10px 20px; border-radius:10px; font-size:13px; font-weight:500;
+  box-shadow:0 4px 16px var(--shadow); animation:fadeIn 0.3s ease;
+  white-space:nowrap;
+}
+.toast.warn { background:#FFF3CD; color:#856404; border:1px solid #FFE69C; }
+.toast.alert { background:#F8D7DA; color:#842029; border:1px solid #F5C2C7; }
+
 /* 흐리게 처리 */
 .note.dimmed { opacity:0.2; pointer-events:none; }
 </style>
@@ -815,6 +825,12 @@ function BoardView({ user, board, onBack }) {
               dimmed={hasFilter && !isMatch(n)} />
           ))}
         </div>
+        {notes.length > 100 && (
+          <div className="toast alert">메모가 {notes.length}개입니다! 내보내기 후 정리해보세요</div>
+        )}
+        {notes.length > 80 && notes.length <= 100 && (
+          <div className="toast warn">메모가 {notes.length}개 — 슬슬 정리할 때가 됐어요</div>
+        )}
       </div>
     </div>
   );
