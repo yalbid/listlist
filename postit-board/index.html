@@ -840,19 +840,32 @@ function BoardView({ user, board, onBack }) {
   };
 
   // 메모 추가
-  const addNote = (color) => {
-    const rect = wrapRef.current.getBoundingClientRect();
-    const cx = (rect.width / 2 - cam.x) / cam.zoom;
-    const cy = (rect.height / 2 - cam.y) / cam.zoom;
+  const addNote = (color, posX, posY) => {
     const now = firebase.firestore.FieldValue.serverTimestamp();
+    let x, y;
+    if (posX != null && posY != null) {
+      x = posX; y = posY;
+    } else {
+      const rect = wrapRef.current.getBoundingClientRect();
+      x = Math.round((rect.width / 2 - cam.x) / cam.zoom - 100);
+      y = Math.round((rect.height / 2 - cam.y) / cam.zoom - 60);
+    }
     notesRef.add({
       text: '', color: color || 'etc',
-      x: Math.round(cx - 100), y: Math.round(cy - 60),
-      tags: [], createdAt: now, updatedAt: now
+      x, y, tags: [], createdAt: now, updatedAt: now
     });
     db.collection('users').doc(user.uid).collection('postit_boards').doc(board.id)
       .update({ updatedAt: now });
     setShowAddMenu(false);
+  };
+
+  // 빈 공간 더블클릭으로 메모 생성
+  const handleDblClick = (e) => {
+    if (e.target !== wrapRef.current && e.target !== canvasRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const x = Math.round((e.clientX - rect.left - cam.x) / cam.zoom - 100);
+    const y = Math.round((e.clientY - rect.top - cam.y) / cam.zoom - 60);
+    addNote('etc', x, y);
   };
 
   // 메모 수정
@@ -890,7 +903,8 @@ function BoardView({ user, board, onBack }) {
   return (
     <div>
       <div className="canvas-wrap" ref={wrapRef}
-        onMouseDown={startPan} onTouchStart={startPan}>
+        onMouseDown={startPan} onTouchStart={startPan}
+        onDoubleClick={handleDblClick}>
         <div className="canvas-toolbar">
           <button onClick={onBack}>← 목록</button>
           <button onClick={() => setShowAddMenu(v => !v)}>+ 메모</button>
