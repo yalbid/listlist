@@ -92,7 +92,6 @@
 <body>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
@@ -100,15 +99,8 @@ const { useState, useEffect, useRef, useCallback } = React;
 /* ── Firebase 동기화 ── */
 const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
 const _fbDb=_fbApp.firestore();
-const _fbAuth=_fbApp.auth();
-let _fbReady=false;
-_fbAuth.onAuthStateChanged(u=>{
-  if(u){_fbReady=true;}
-  else{_fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>console.warn('Auth failed:',e));}
-});
 
 function _syncCommToFirebase(commissions, customTypes) {
-  if(!_fbReady)return;
   try {
     const now = new Date();
     const dateKey = k => { const d = new Date(k); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
@@ -135,6 +127,23 @@ const STORAGE_KEY = "commission-tracker-data";
 const IDB_NAME = "commission-tracker-images";
 const IDB_STORE = "images";
 const TIMER_DEFAULTS = { work: 25, shortBreak: 5, longBreak: 15 };
+const TIMER_STATE_KEY = "cms-timer-state";
+
+function saveTimerState(state) {
+  try { localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+function clearTimerState() {
+  try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
+}
+function loadTimerState() {
+  try {
+    const raw = localStorage.getItem(TIMER_STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (s.startTime && (Date.now() - s.startTime) > 24 * 60 * 60 * 1000) { clearTimerState(); return null; }
+    return s;
+  } catch(e) { return null; }
+}
 
 function openImageDB() {
   return new Promise(function(resolve, reject) {
@@ -385,6 +394,24 @@ function CommissionTracker() {
     if (loaded) saveData(commissions, timerSettings);
   }, [commissions, timerSettings, customTypes, platforms, loaded, saveData]);
 
+  // 타이머 복구
+  useEffect(() => {
+    if (!loaded) return;
+    const saved = loadTimerState();
+    if (!saved) return;
+    setTimerMode(saved.mode);
+    setPomodoroCount(saved.pomodoroCount || 0);
+    if (saved.selectedId) setSelectedId(saved.selectedId);
+    if (saved.state === "running" && saved.startTime) {
+      timerStartRef.current = saved.startTime;
+      timerAccumulatedRef.current = saved.accumulated || 0;
+      setTimerState("running");
+    } else if (saved.state === "paused") {
+      timerAccumulatedRef.current = saved.accumulated || 0;
+      setTimerState("paused");
+    }
+  }, [loaded]);
+
   useEffect(() => {
     if (timerState === "running") {
       if (!timerStartRef.current) timerStartRef.current = Date.now();
@@ -400,6 +427,7 @@ function CommissionTracker() {
         if (remaining <= 0) {
           clearInterval(intervalRef.current);
           playAlarm();
+          clearTimerState();
           timerStartRef.current = null;
           timerAccumulatedRef.current = 0;
 
@@ -466,6 +494,7 @@ function CommissionTracker() {
       timerStartRef.current = Date.now();
       timerAccumulatedRef.current = 0;
       setTimerState("running");
+      saveTimerState({ state: "running", mode: timerMode, startTime: Date.now(), accumulated: 0, selectedId, pomodoroCount, settings: timerSettings });
     }
   }
   function pauseTimer() {
@@ -474,12 +503,14 @@ function CommissionTracker() {
       timerAccumulatedRef.current += Math.floor((Date.now() - timerStartRef.current) / 1000);
       timerStartRef.current = null;
       setTimerState("paused");
+      saveTimerState({ state: "paused", mode: timerMode, startTime: null, accumulated: timerAccumulatedRef.current, selectedId, pomodoroCount, settings: timerSettings });
     }
   }
   function resumeTimer() {
     if (timerState === "paused") {
       timerStartRef.current = Date.now();
       setTimerState("running");
+      saveTimerState({ state: "running", mode: timerMode, startTime: Date.now(), accumulated: timerAccumulatedRef.current, selectedId, pomodoroCount, settings: timerSettings });
     }
   }
   function stopTimer() {
@@ -501,6 +532,7 @@ function CommissionTracker() {
     setTimerMode("work");
     setTimeLeft(timerSettings.work * 60);
     setSessionElapsed(0);
+    clearTimerState();
   }
 
   function resetForm() {
