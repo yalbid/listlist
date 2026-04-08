@@ -92,13 +92,16 @@
 <body>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
 
-/* ── Firebase 동기화 ── */
+/* ── Firebase 동기화 & 인증 ── */
 const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
 const _fbDb=_fbApp.firestore();
+const _fbAuth=_fbApp.auth();
+const _googleProvider=new firebase.auth.GoogleAuthProvider();
 
 function _syncCommToFirebase(commissions, customTypes) {
   try {
@@ -1949,7 +1952,23 @@ function CommissionTracker() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<CommissionTracker />);
+function AuthGate({children}){
+  const[user,setUser]=useState(null);
+  const[checking,setChecking]=useState(true);
+  const[err,setErr]=useState('');
+  useEffect(()=>{const unsub=_fbAuth.onAuthStateChanged(u=>{setUser(u);setChecking(false)});return unsub},[]);
+  const doLogin=()=>{setErr('');_fbAuth.signInWithPopup(_googleProvider).catch(e=>{console.error('Auth error:',e);setErr(e.code==='auth/operation-not-allowed'?'Firebase 콘솔에서 Google 로그인을 활성화해주세요':'팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요.')})};
+  if(checking)return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--color-background)',color:'var(--color-text-secondary)'}}><p>확인 중...</p></div>);
+  if(!user)return(<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,background:'var(--color-background)'}}>
+    <p style={{fontSize:18,fontWeight:600,color:'var(--color-text)'}}>CMS 트래커</p>
+    <p style={{fontSize:13,color:'var(--color-text-secondary)',marginBottom:8}}>Google 계정으로 로그인해주세요</p>
+    <button onClick={doLogin} style={{padding:'12px 32px',background:'var(--color-primary)',color:'#fff',border:'none',borderRadius:12,fontSize:15,fontWeight:600,cursor:'pointer'}}>Google 로그인</button>
+    {err&&<p style={{color:'#D45B5B',fontSize:12,maxWidth:300,textAlign:'center'}}>{err}</p>}
+  </div>);
+  return children;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AuthGate><CommissionTracker /></AuthGate>);
 </script>
 </body>
 </html>
