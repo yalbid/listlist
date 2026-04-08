@@ -993,18 +993,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
-// ========== Firebase 동기화 ==========
+// ========== Firebase 동기화 & 인증 ==========
 const _fbApp=firebase.initializeApp({apiKey:"AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",authDomain:"happycalendar-1dd07.firebaseapp.com",projectId:"happycalendar-1dd07",storageBucket:"happycalendar-1dd07.firebasestorage.app",messagingSenderId:"961264346042",appId:"1:961264346042:web:35c85ff0a1c02ab2acb383"});
 const _fbDb=_fbApp.firestore();
 const _fbAuth=_fbApp.auth();
-let _fbReady=false;
-_fbAuth.onAuthStateChanged(u=>{
-  if(u){_fbReady=true;}
-  else{_fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>console.warn('Auth failed:',e));}
-});
+const _googleProvider=new firebase.auth.GoogleAuthProvider();
 
 function _syncDojToFirebase() {
-  if(!_fbReady)return;
   try {
     // 작업시간
     _fbDb.collection('trackerSync').doc('doujinshi').set({
@@ -2793,8 +2788,26 @@ function importData(e) {
   e.target.value = '';
 }
 
-// ========== START ==========
-init();
+// ========== AUTH GATE & START ==========
+function showLoginScreen() {
+  document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px;background:var(--bg);font-family:\'Noto Sans KR\',sans-serif">' +
+    '<p style="font-size:18px;font-weight:600;color:var(--text)">동인지 트래커</p>' +
+    '<p style="font-size:13px;color:var(--text-sub);margin-bottom:8px">Google 계정으로 로그인해주세요</p>' +
+    '<button id="loginBtn" style="padding:12px 32px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer">Google 로그인</button>' +
+    '<p id="loginErr" style="color:#D45B5B;font-size:12px;max-width:300px;text-align:center;display:none"></p></div>';
+  document.getElementById('loginBtn').onclick = function() {
+    _fbAuth.signInWithPopup(_googleProvider).catch(function(e) {
+      var errEl = document.getElementById('loginErr');
+      errEl.style.display = 'block';
+      errEl.textContent = e.code === 'auth/operation-not-allowed' ? 'Firebase 콘솔에서 Google 로그인을 활성화해주세요' : '팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요.';
+    });
+  };
+}
+
+_fbAuth.onAuthStateChanged(function(user) {
+  if (user) { init(); }
+  else { showLoginScreen(); }
+});
 </script>
 </body>
 </html>
