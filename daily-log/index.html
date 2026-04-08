@@ -76,44 +76,6 @@ function formatTime(ts) {
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
-function loadEntries(dateKey) {
-  try {
-    const raw = localStorage.getItem("dailylog:" + dateKey);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) { return []; }
-}
-
-function saveEntries(dateKey, entries) {
-  try {
-    localStorage.setItem("dailylog:" + dateKey, JSON.stringify(entries));
-  } catch (e) { console.error("Storage error:", e); }
-}
-
-function loadDeletedIds(dateKey) {
-  try {
-    const raw = localStorage.getItem("dailylog-deleted:" + dateKey);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) { return []; }
-}
-
-function saveDeletedIds(dateKey, ids) {
-  try {
-    localStorage.setItem("dailylog-deleted:" + dateKey, JSON.stringify(ids));
-  } catch (e) {}
-}
-
-async function saveEntriesToFirebase(dateKey, entries, deletedIds) {
-  try {
-    const remote = await loadEntriesFromFirebase(dateKey);
-    const merged = mergeEntries(entries, remote, deletedIds);
-    await fireDb.collection("dailyLogEntries").doc(dateKey).set({
-      items: JSON.stringify(merged),
-      deletedIds: JSON.stringify(deletedIds || [])
-    });
-    return merged;
-  } catch (e) { console.warn("Firebase entry sync failed:", e); return entries; }
-}
-
 async function loadEntriesFromFirebase(dateKey) {
   try {
     const doc = await fireDb.collection("dailyLogEntries").doc(dateKey).get();
@@ -122,25 +84,12 @@ async function loadEntriesFromFirebase(dateKey) {
     if (data.items) return JSON.parse(data.items);
     if (data.entries) return data.entries;
     return [];
-  } catch (e) { console.warn("Firebase entry load failed:", e); return []; }
+  } catch (e) { console.warn("Firebase load failed:", e); return []; }
 }
 
-async function loadDeletedIdsFromFirebase(dateKey) {
-  try {
-    const doc = await fireDb.collection("dailyLogEntries").doc(dateKey).get();
-    if (!doc.exists) return [];
-    const data = doc.data();
-    if (data.deletedIds) return JSON.parse(data.deletedIds);
-    return [];
-  } catch (e) { return []; }
-}
-
-function mergeEntries(local, remote, deletedIds) {
-  const delSet = new Set(deletedIds || []);
-  const idMap = new Map();
-  local.forEach(e => { if (!delSet.has(e.id)) idMap.set(e.id, e); });
-  remote.forEach(e => { if (!delSet.has(e.id) && !idMap.has(e.id)) idMap.set(e.id, e); });
-  return Array.from(idMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+function saveEntriesToFirebase(dateKey, entries) {
+  fireDb.collection("dailyLogEntries").doc(dateKey).set({ items: JSON.stringify(entries) })
+    .catch(e => console.warn("Firebase save failed:", e));
 }
 
 /* ── 작업 통계 탭 컴포넌트 ── */
@@ -550,46 +499,26 @@ function AuthGate({children}){
 }
 function DailyLog() {
   const today = getTodayForLog();
-  const [entries, setEntries] = useState(() => loadEntries(today));
+  const [entries, setEntries] = useState([]);
   const [selectedCat, setSelectedCat] = useState(null);
   const [memo, setMemo] = useState("");
   const [view, setView] = useState("log");
   const [showToast, setShowToast] = useState(false);
-  const [synced, setSynced] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const inputRef = useRef(null);
 
-  // 처음 열 때 파이어베이스에서도 불러와서 합치기
+  // 처음 열 때 파이어베이스에서 불러오기
   useEffect(() => {
-    Promise.all([
-      loadEntriesFromFirebase(today),
-      loadDeletedIdsFromFirebase(today)
-    ]).then(([remote, remoteDeleted]) => {
-      const localDel = loadDeletedIds(today);
-      const allDeleted = [...new Set([...localDel, ...remoteDeleted])];
-      saveDeletedIds(today, allDeleted);
-      setEntries(prev => {
-        const merged = mergeEntries(prev, remote, allDeleted);
-        saveEntries(today, merged);
-        return merged;
-      });
-      setSynced(true);
+    loadEntriesFromFirebase(today).then(data => {
+      setEntries(data);
+      setLoaded(true);
     });
   }, []);
 
-  // entries가 바뀔 때마다 로컬 + 파이어베이스 저장
+  // entries가 바뀔 때마다 파이어베이스 저장
   useEffect(() => {
-    saveEntries(today, entries);
-    if (synced) {
-      const deletedIds = loadDeletedIds(today);
-      saveEntriesToFirebase(today, entries, deletedIds).then(merged => {
-        saveEntries(today, merged);
-        setEntries(prev => {
-          if (prev.length === merged.length && prev.every((e, i) => e.id === merged[i].id)) return prev;
-          return merged;
-        });
-      });
-    }
-  }, [entries, synced]);
+    if (loaded) saveEntriesToFirebase(today, entries);
+  }, [entries, loaded]);
 
   const addEntry = () => {
     if (!selectedCat || !memo.trim()) return;
@@ -601,12 +530,7 @@ function DailyLog() {
     setTimeout(() => setShowToast(false), 1800);
   };
 
-  const removeEntry = (id) => {
-    const deleted = loadDeletedIds(today);
-    deleted.push(id);
-    saveDeletedIds(today, deleted);
-    setEntries(prev => prev.filter(e => e.id !== id));
-  };
+  const removeEntry = (id) => { setEntries(prev => prev.filter(e => e.id !== id)); };
   const catInfo = (id) => CATEGORIES.find(c => c.id === id);
 
   const categorySummary = CATEGORIES.map(cat => ({
