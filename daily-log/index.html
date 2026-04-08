@@ -89,11 +89,29 @@ function saveEntries(dateKey, entries) {
   } catch (e) { console.error("Storage error:", e); }
 }
 
-function saveEntriesToFirebase(dateKey, entries) {
+function loadDeletedIds(dateKey) {
   try {
-    fireDb.collection("dailyLogEntries").doc(dateKey).set({ items: JSON.stringify(entries) })
-      .catch(e => console.warn("Firebase entry sync failed:", e));
-  } catch (e) { console.warn("Firebase entry sync failed:", e); }
+    const raw = localStorage.getItem("dailylog-deleted:" + dateKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function saveDeletedIds(dateKey, ids) {
+  try {
+    localStorage.setItem("dailylog-deleted:" + dateKey, JSON.stringify(ids));
+  } catch (e) {}
+}
+
+async function saveEntriesToFirebase(dateKey, entries, deletedIds) {
+  try {
+    const remote = await loadEntriesFromFirebase(dateKey);
+    const merged = mergeEntries(entries, remote, deletedIds);
+    await fireDb.collection("dailyLogEntries").doc(dateKey).set({
+      items: JSON.stringify(merged),
+      deletedIds: JSON.stringify(deletedIds || [])
+    });
+    return merged;
+  } catch (e) { console.warn("Firebase entry sync failed:", e); return entries; }
 }
 
 async function loadEntriesFromFirebase(dateKey) {
@@ -107,12 +125,22 @@ async function loadEntriesFromFirebase(dateKey) {
   } catch (e) { console.warn("Firebase entry load failed:", e); return []; }
 }
 
-function mergeEntries(local, remote) {
-  const ids = new Set(local.map(e => e.id));
-  const merged = [...local];
-  remote.forEach(e => { if (!ids.has(e.id)) merged.push(e); });
-  merged.sort((a, b) => a.timestamp - b.timestamp);
-  return merged;
+async function loadDeletedIdsFromFirebase(dateKey) {
+  try {
+    const doc = await fireDb.collection("dailyLogEntries").doc(dateKey).get();
+    if (!doc.exists) return [];
+    const data = doc.data();
+    if (data.deletedIds) return JSON.parse(data.deletedIds);
+    return [];
+  } catch (e) { return []; }
+}
+
+function mergeEntries(local, remote, deletedIds) {
+  const delSet = new Set(deletedIds || []);
+  const idMap = new Map();
+  local.forEach(e => { if (!delSet.has(e.id)) idMap.set(e.id, e); });
+  remote.forEach(e => { if (!delSet.has(e.id) && !idMap.has(e.id)) idMap.set(e.id, e); });
+  return Array.from(idMap.values()).sort((a, b) => a.timestamp - b.timestamp);
 }
 
 /* ── 작업 통계 탭 컴포넌트 ── */
@@ -532,9 +560,15 @@ function DailyLog() {
 
   // 처음 열 때 파이어베이스에서도 불러와서 합치기
   useEffect(() => {
-    loadEntriesFromFirebase(today).then(remote => {
+    Promise.all([
+      loadEntriesFromFirebase(today),
+      loadDeletedIdsFromFirebase(today)
+    ]).then(([remote, remoteDeleted]) => {
+      const localDel = loadDeletedIds(today);
+      const allDeleted = [...new Set([...localDel, ...remoteDeleted])];
+      saveDeletedIds(today, allDeleted);
       setEntries(prev => {
-        const merged = mergeEntries(prev, remote);
+        const merged = mergeEntries(prev, remote, allDeleted);
         saveEntries(today, merged);
         return merged;
       });
@@ -545,7 +579,16 @@ function DailyLog() {
   // entries가 바뀔 때마다 로컬 + 파이어베이스 저장
   useEffect(() => {
     saveEntries(today, entries);
-    if (synced) saveEntriesToFirebase(today, entries);
+    if (synced) {
+      const deletedIds = loadDeletedIds(today);
+      saveEntriesToFirebase(today, entries, deletedIds).then(merged => {
+        saveEntries(today, merged);
+        setEntries(prev => {
+          if (prev.length === merged.length && prev.every((e, i) => e.id === merged[i].id)) return prev;
+          return merged;
+        });
+      });
+    }
   }, [entries, synced]);
 
   const addEntry = () => {
@@ -558,7 +601,12 @@ function DailyLog() {
     setTimeout(() => setShowToast(false), 1800);
   };
 
-  const removeEntry = (id) => { setEntries(prev => prev.filter(e => e.id !== id)); };
+  const removeEntry = (id) => {
+    const deleted = loadDeletedIds(today);
+    deleted.push(id);
+    saveDeletedIds(today, deleted);
+    setEntries(prev => prev.filter(e => e.id !== id));
+  };
   const catInfo = (id) => CATEGORIES.find(c => c.id === id);
 
   const categorySummary = CATEGORIES.map(cat => ({
