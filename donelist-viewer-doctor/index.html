@@ -242,6 +242,8 @@ function DoctorViewer() {
   const [loading, setLoading] = useState(true);
   const [initializing, setInitializing] = useState(true);
   const [showItems, setShowItems] = useState({});
+  const [searchText, setSearchText] = useState("");
+  const [filterTag, setFilterTag] = useState(null); // { type: "tag"|"event", value }
 
   // 초기화: 지난 내원일 찾기
   useEffect(() => {
@@ -270,6 +272,31 @@ function DoctorViewer() {
 
   const sortedDates = useMemo(() => Object.keys(rawData).sort().reverse(), [rawData]);
   const days = startDate && endDate ? daysBetween(startDate, endDate) : 0;
+
+  // 검색/필터 적용
+  const filteredDates = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    return sortedDates.filter(dk => {
+      const d = rawData[dk];
+      // 태그/이벤트 필터
+      if (filterTag) {
+        const match = (d.statusLog || []).some(s => s.type === filterTag.type && s.value === filterTag.value);
+        if (!match) return false;
+      }
+      // 텍스트 검색
+      if (!q) return true;
+      const moods = d.moods || [];
+      const sl = d.statusLog || [];
+      if (moods.some(m => (m.note || "").toLowerCase().includes(q))) return true;
+      if (moods.some(m => (moodMap[m.mood]?.label || "").includes(q))) return true;
+      if (sl.some(s => s.value.toLowerCase().includes(q) || (s.note || "").toLowerCase().includes(q))) return true;
+      if (d.periodStart && "생리".includes(q)) return true;
+      return false;
+    });
+  }, [sortedDates, rawData, searchText, filterTag]);
+
+  const searchActive = searchText.trim() || filterTag;
+  const displayDates = searchActive ? filteredDates : sortedDates;
 
   // 요약 통계
   const summary = useMemo(() => {
@@ -343,6 +370,33 @@ function DoctorViewer() {
             <button key={p.id} onClick={() => setPreset(p.id)} style={S.presetBtn}>{p.label}</button>
           ))}
         </div>
+
+        {/* 검색 */}
+        <div style={{ marginBottom: 8 }}>
+          <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)}
+            placeholder="검색 (기분 사유, 태그, 이벤트, 메모...)" style={S.searchInput} />
+        </div>
+
+        {/* 태그/이벤트 필터 */}
+        {(summary.tags.length > 0 || summary.events.length > 0) && (
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 16 }}>
+            {filterTag && (
+              <button onClick={() => setFilterTag(null)} style={{ ...S.presetBtn, background: "rgba(255,255,255,0.12)", color: "#e0e0e0" }}>× 초기화</button>
+            )}
+            {summary.events.map(e => (
+              <button key={"e-" + e} onClick={() => setFilterTag(filterTag?.type === "event" && filterTag?.value === e ? null : { type: "event", value: e })}
+                style={{ ...S.filterChip, background: filterTag?.type === "event" && filterTag?.value === e ? "rgba(232,146,124,0.3)" : "rgba(232,146,124,0.1)", borderColor: filterTag?.type === "event" && filterTag?.value === e ? "#e8927c" : "rgba(232,146,124,0.2)", color: "#e8927c" }}>{e}</button>
+            ))}
+            {summary.tags.map(t => (
+              <button key={"t-" + t} onClick={() => setFilterTag(filterTag?.type === "tag" && filterTag?.value === t ? null : { type: "tag", value: t })}
+                style={{ ...S.filterChip, background: filterTag?.type === "tag" && filterTag?.value === t ? "rgba(184,169,212,0.3)" : "rgba(184,169,212,0.1)", borderColor: filterTag?.type === "tag" && filterTag?.value === t ? "#b8a9d4" : "rgba(184,169,212,0.2)", color: "#b8a9d4" }}>{t}</button>
+            ))}
+          </div>
+        )}
+
+        {searchActive && (
+          <p style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>{displayDates.length}개 날짜 매칭</p>
+        )}
       </div>
 
       {/* 인쇄용 헤더 */}
@@ -397,7 +451,7 @@ function DoctorViewer() {
         {/* 로딩 / 빈 상태 */}
         {loading ? (
           <div style={S.empty}><p style={{ color: "#888", fontSize: 14 }}>불러오는 중...</p></div>
-        ) : sortedDates.length === 0 ? (
+        ) : displayDates.length === 0 ? (
           <div style={S.empty}>
             <span style={{ fontSize: 32, marginBottom: 12 }}>{"\u{1F4CB}"}</span>
             <p style={{ color: "#777", fontSize: 14 }}>이 기간에는 기록이 없어요</p>
@@ -405,7 +459,7 @@ function DoctorViewer() {
         ) : (
           /* 타임라인 */
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {sortedDates.map(dk => {
+            {displayDates.map(dk => {
               const d = rawData[dk];
               const moods = d.moods || [];
               const tags = (d.statusLog || []).filter(s => s.type === "tag");
@@ -516,6 +570,8 @@ const S = {
   dateInput: { flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", color: "#e0e0e0", fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif", outline: "none" },
   presetRow: { display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" },
   presetBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#aaa", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  searchInput: { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "9px 12px", color: "#e0e0e0", fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif", outline: "none" },
+  filterChip: { border: "1px solid", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 500 },
 
   summaryBox: { background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "16px 18px", marginBottom: 16, borderLeft: "3px solid #b8a9d4" },
   summaryTag: { fontSize: 11, color: "#b8a9d4", background: "rgba(184,169,212,0.15)", padding: "1px 7px", borderRadius: 6, marginLeft: 4 },
