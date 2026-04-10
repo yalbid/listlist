@@ -728,7 +728,7 @@ function DailyLog() {
             </div>
 
             {/* Mood History */}
-            {moods.length >= 2 && (
+            {moods.length >= 1 && (
               <div style={styles.moodHistory}>
                 <div style={styles.moodHistoryHeader}>
                   <span style={{ fontSize: 14 }}>{MOOD_ICONS.find(m => m.value === currentMood.mood)?.emoji}</span>
