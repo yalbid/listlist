@@ -692,14 +692,33 @@ function DailyLog() {
               >+</button>
             </div>
 
+            {/* Mood History */}
+            {moods.length >= 2 && (
+              <div style={styles.moodHistory}>
+                <div style={styles.moodHistoryHeader}>
+                  <span style={{ fontSize: 14 }}>{MOOD_ICONS.find(m => m.value === currentMood.mood)?.emoji}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#e0e0e0" }}>기분 변화</span>
+                  <span style={styles.moodHistoryCount}>{moods.length}회</span>
+                </div>
+                {moods.map((m, i) => (
+                  <div key={i} style={styles.moodHistoryItem}>
+                    <span style={{ fontSize: 14, flexShrink: 0 }}>{MOOD_ICONS.find(mi => mi.value === m.mood)?.emoji}</span>
+                    <span style={{ fontSize: 12, color: "#b8a9d4", flexShrink: 0, width: 64 }}>{MOOD_ICONS.find(mi => mi.value === m.mood)?.label}</span>
+                    {m.note ? <span style={{ flex: 1, fontSize: 12, color: "#aaa" }}>— {m.note}</span> : <span style={{ flex: 1 }} />}
+                    <span style={{ fontSize: 11, color: "#666", flexShrink: 0 }}>{formatTime(m.time)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Entry List */}
             <div style={styles.entryList}>
-              {entries.length === 0 ? (
+              {entries.length === 0 && moods.length === 0 ? (
                 <div style={styles.empty}>
                   <span style={{ fontSize: 32, marginBottom: 12 }}>🌙</span>
                   <p style={{ color: "#777", fontSize: 14, lineHeight: 1.6 }}>아직 기록이 없어요<br/>오늘 한 일을 하나씩 적어보세요</p>
                 </div>
-              ) : (
+              ) : entries.length === 0 ? null : (
                 [...entries].reverse().map(entry => {
                   const cat = catInfo(entry.category);
                   return (
@@ -741,8 +760,26 @@ function DailyLog() {
                   <p style={styles.encourageSub}>총 {totalCount}건, {categorySummary.length}개 분야에서 작업했어요</p>
                 </div>
 
+                {moods.length > 0 && (
+                  <div className="summary-card" style={{ ...styles.summaryCard, animationDelay: "0s", borderLeft: "3px solid #b8a9d4" }}>
+                    <div style={styles.summaryCardHeader}>
+                      <span style={{ fontSize: 18 }}>{MOOD_ICONS.find(m => m.value === moods[moods.length - 1].mood)?.emoji}</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#e0e0e0" }}>기분</span>
+                      <span style={{ ...styles.summaryCount, background: "rgba(184,169,212,0.12)", color: "#b8a9d4" }}>{moods.length}회</span>
+                    </div>
+                    <ul style={styles.summaryList}>
+                      {moods.map((m, i) => (
+                        <li key={i} style={styles.summaryItem}>
+                          <span style={{ color: "#ccc" }}>{MOOD_ICONS.find(mi => mi.value === m.mood)?.emoji} {MOOD_ICONS.find(mi => mi.value === m.mood)?.label}{m.note ? " — " + m.note : ""}</span>
+                          <span style={{ color: "#666", fontSize: 12, flexShrink: 0 }}>{formatTime(m.time)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {categorySummary.map((cat, i) => (
-                  <div key={cat.id} className="summary-card" style={{ ...styles.summaryCard, animationDelay: (i * 0.08) + "s", borderLeft: "3px solid " + cat.color }}>
+                  <div key={cat.id} className="summary-card" style={{ ...styles.summaryCard, animationDelay: ((moods.length > 0 ? 1 : 0) + i) * 0.08 + "s", borderLeft: "3px solid " + cat.color }}>
                     <div style={styles.summaryCardHeader}>
                       <span style={{ fontSize: 18 }}>{cat.emoji}</span>
                       <span style={{ fontSize: 15, fontWeight: 600, color: "#e0e0e0" }}>{cat.label}</span>
@@ -806,6 +843,10 @@ const styles = {
   moodNoteInput: { flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(184,169,212,0.3)", borderRadius: 8, padding: "8px 12px", color: "#e0e0e0", fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif", outline: "none" },
   moodConfirmBtn: { background: "#b8a9d4", border: "none", borderRadius: 8, padding: "8px 14px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", flexShrink: 0 },
   moodCancelBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", color: "#888", fontSize: 13, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", flexShrink: 0 },
+  moodHistory: { background: "rgba(255,255,255,0.03)", borderRadius: 12, borderLeft: "3px solid #b8a9d4", marginBottom: 16, overflow: "hidden" },
+  moodHistoryHeader: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px" },
+  moodHistoryCount: { fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "rgba(184,169,212,0.12)", color: "#b8a9d4", marginLeft: "auto" },
+  moodHistoryItem: { display: "flex", alignItems: "center", gap: 8, padding: "6px 14px 6px 20px", borderTop: "1px solid rgba(255,255,255,0.04)" },
   catRow: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 },
   catBtn: { display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
   inputRow: { display: "flex", gap: 8, marginBottom: 24 },
