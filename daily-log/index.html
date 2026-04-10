@@ -524,11 +524,30 @@ function DailyLog() {
   const inputRef = useRef(null);
 
   const currentMood = moods.length > 0 ? moods[moods.length - 1] : null;
+  const [pendingMood, setPendingMood] = useState(null);
+  const [moodNote, setMoodNote] = useState("");
+  const moodNoteRef = useRef(null);
 
   const selectMood = (value) => {
-    const newMoods = [...moods, { mood: value, time: Date.now() }];
+    setPendingMood(value);
+    setMoodNote("");
+    setTimeout(() => moodNoteRef.current && moodNoteRef.current.focus(), 100);
+  };
+
+  const confirmMood = () => {
+    if (pendingMood == null) return;
+    const entry = { mood: pendingMood, time: Date.now() };
+    if (moodNote.trim()) entry.note = moodNote.trim();
+    const newMoods = [...moods, entry];
     setMoods(newMoods);
     saveMoodsToFirebase(today, newMoods);
+    setPendingMood(null);
+    setMoodNote("");
+  };
+
+  const cancelMood = () => {
+    setPendingMood(null);
+    setMoodNote("");
   };
 
   // 처음 열 때 파이어베이스에서 불러오기
@@ -599,16 +618,29 @@ function DailyLog() {
                 {MOOD_ICONS.map(m => (
                   <button key={m.value} onClick={() => selectMood(m.value)} style={{
                     ...styles.moodBtn,
-                    background: currentMood && currentMood.mood === m.value ? "rgba(184,169,212,0.25)" : "transparent",
-                    boxShadow: currentMood && currentMood.mood === m.value ? "0 0 0 2px #b8a9d4" : "none",
+                    background: pendingMood === m.value ? "rgba(184,169,212,0.35)" : currentMood && currentMood.mood === m.value && pendingMood == null ? "rgba(184,169,212,0.25)" : "transparent",
+                    boxShadow: pendingMood === m.value ? "0 0 0 2px #b8a9d4" : currentMood && currentMood.mood === m.value && pendingMood == null ? "0 0 0 1px rgba(184,169,212,0.4)" : "none",
                   }}>
                     <span style={{ fontSize: 28 }}>{m.emoji}</span>
                   </button>
                 ))}
               </div>
-              {currentMood && (
+              {pendingMood != null && (
+                <div style={styles.moodNoteArea}>
+                  <p style={{ fontSize: 12, color: "#b8a9d4", marginBottom: 6 }}>{MOOD_ICONS.find(m => m.value === pendingMood)?.emoji} {MOOD_ICONS.find(m => m.value === pendingMood)?.label}</p>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input ref={moodNoteRef} type="text" value={moodNote} onChange={e => setMoodNote(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && confirmMood()} placeholder="사유 (선택)"
+                      style={styles.moodNoteInput} />
+                    <button onClick={confirmMood} style={styles.moodConfirmBtn}>확인</button>
+                    <button onClick={cancelMood} style={styles.moodCancelBtn}>취소</button>
+                  </div>
+                </div>
+              )}
+              {pendingMood == null && currentMood && (
                 <p style={styles.moodCurrent}>
                   {MOOD_ICONS.find(m => m.value === currentMood.mood)?.label} · {formatTime(currentMood.time)}
+                  {currentMood.note && <span style={{ color: "#aaa" }}> — {currentMood.note}</span>}
                   {moods.length > 1 && <span style={{ color: "#666" }}> ({moods.length}번째)</span>}
                 </p>
               )}
@@ -770,6 +802,10 @@ const styles = {
   moodRow: { display: "flex", justifyContent: "space-around", gap: 4 },
   moodBtn: { border: "none", borderRadius: 12, padding: "8px 12px", cursor: "pointer", transition: "all 0.15s" },
   moodCurrent: { textAlign: "center", fontSize: 12, color: "#b8a9d4", marginTop: 8 },
+  moodNoteArea: { marginTop: 10, textAlign: "center" },
+  moodNoteInput: { flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(184,169,212,0.3)", borderRadius: 8, padding: "8px 12px", color: "#e0e0e0", fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif", outline: "none" },
+  moodConfirmBtn: { background: "#b8a9d4", border: "none", borderRadius: 8, padding: "8px 14px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", flexShrink: 0 },
+  moodCancelBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", color: "#888", fontSize: 13, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", flexShrink: 0 },
   catRow: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 },
   catBtn: { display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
   inputRow: { display: "flex", gap: 8, marginBottom: 24 },
