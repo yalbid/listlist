@@ -735,7 +735,9 @@ function DailyLog() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: "#e0e0e0" }}>기분 변화</span>
                   <span style={styles.moodHistoryCount}>{moods.length}회</span>
                 </div>
-                {moods.map((m, i) => (
+                {[...moods].reverse().map((m, ri) => {
+                  const i = moods.length - 1 - ri;
+                  return (
                   <div key={i} className="entry-row" style={styles.moodHistoryItem}>
                     <span style={{ fontSize: 14, flexShrink: 0 }}>{MOOD_ICONS.find(mi => mi.value === m.mood)?.emoji}</span>
                     <span style={{ fontSize: 12, color: "#b8a9d4", flexShrink: 0, width: 64 }}>{MOOD_ICONS.find(mi => mi.value === m.mood)?.label}</span>
@@ -743,7 +745,8 @@ function DailyLog() {
                     <span style={{ fontSize: 11, color: "#666", flexShrink: 0 }}>{formatTime(m.time)}</span>
                     <button className="remove-btn" onClick={() => removeMood(i)} style={styles.moodRemoveBtn} title="삭제">×</button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
