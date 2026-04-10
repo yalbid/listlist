@@ -706,7 +706,7 @@ function DonelistViewer() {
                       style={S.dateHeader}>
                       <span style={S.collapseIcon}>{isCollapsed ? "▶" : "▼"}</span>
                       <span style={S.dateLabel}>{formatDateLabel(group.dateKey)}</span>
-                      {lastMood && <span style={{ fontSize: 16 }} title={moodMap[lastMood.mood]?.label}>{moodMap[lastMood.mood]?.emoji}</span>}
+                      {lastMood && <span style={{ fontSize: 16 }} title={(moodMap[lastMood.mood]?.label || "") + (lastMood.note ? " — " + lastMood.note : "")}>{moodMap[lastMood.mood]?.emoji}</span>}
                       {dayPeriod && <span style={{ fontSize: 13 }} title="생리 시작일">{"\u{1FA78}"}</span>}
                       {uniqueTags.map(t => <span key={t} style={S.headerTag}>{t}</span>)}
                       {uniqueEvents.map(e => <span key={e} style={S.headerEvent}>{e}</span>)}
