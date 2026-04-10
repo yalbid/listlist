@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Donelist Viewer - Doctor</title>
+<meta name="theme-color" content="#1a1a2e">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #1a1a2e; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeInUp 0.3s ease-out; }
+  input:focus { outline: none; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  button { transition: all 0.15s ease; }
+  button:hover { opacity: 0.85; }
+
+  @media print {
+    body { background: #fff !important; }
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    .day-card { break-inside: avoid; border: 1px solid #ddd !important; background: #fff !important; }
+    .day-card * { color: #333 !important; }
+    .summary-box { border: 1px solid #ddd !important; background: #f9f9f9 !important; }
+    .summary-box * { color: #333 !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+/* ── Firebase ── */
+const firebaseApp = firebase.initializeApp({
+  apiKey: "AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",
+  authDomain: "happycalendar-1dd07.firebaseapp.com",
+  projectId: "happycalendar-1dd07",
+  storageBucket: "happycalendar-1dd07.firebasestorage.app",
+  messagingSenderId: "961264346042",
+  appId: "1:961264346042:web:35c85ff0a1c02ab2acb383"
+});
+const fireDb = firebaseApp.firestore();
+const fireAuth = firebaseApp.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+/* ── 상수 ── */
+const MOOD_ICONS = [
+  { value: 1, emoji: "\u{1F622}", label: "매우 안좋음" },
+  { value: 2, emoji: "\u{1F614}", label: "안좋음" },
+  { value: 3, emoji: "\u{1F610}", label: "보통" },
+  { value: 4, emoji: "\u{1F60A}", label: "좋음" },
+  { value: 5, emoji: "\u{1F604}", label: "매우 좋음" },
+];
+const moodMap = {};
+MOOD_ICONS.forEach(m => { moodMap[m.value] = m; });
+
+/* ── 유틸 ── */
+function pad2(n) { return String(n).padStart(2, "0"); }
+function dateStr(y, m, d) { return y + "-" + pad2(m) + "-" + pad2(d); }
+
+function getToday() {
+  const d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return dateStr(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+function formatDateLabel(dateKey) {
+  const [y, m, d] = dateKey.split("-");
+  const dow = ["일", "월", "화", "수", "목", "금", "토"];
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  return parseInt(m) + "월 " + parseInt(d) + "일 (" + dow[date.getDay()] + ")";
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
+function daysBetween(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+}
+
+function daysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return dateStr(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+/* ── Firebase 데이터 로드 ── */
+function parseDocData(data) {
+  let items = [];
+  if (data.items) { try { items = JSON.parse(data.items); } catch(e) {} }
+  else if (data.entries) { items = data.entries; }
+  return {
+    items,
+    moods: data.moods || [],
+    periodStart: data.periodStart || false,
+    statusLog: data.statusLog || [],
+  };
+}
+
+async function loadDateRange(startDate, endDate) {
+  const snap = await fireDb.collection("dailyLogEntries")
+    .where(firebase.firestore.FieldPath.documentId(), ">=", startDate)
+    .where(firebase.firestore.FieldPath.documentId(), "<=", endDate)
+    .get();
+  const result = {};
+  snap.forEach(doc => {
+    const parsed = parseDocData(doc.data());
+    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart) {
+      result[doc.id] = parsed;
+    }
+  });
+  return result;
+}
+
+async function findLastVisit() {
+  const snap = await fireDb.collection("dailyLogEntries")
+    .orderBy(firebase.firestore.FieldPath.documentId(), "desc")
+    .limit(200).get();
+  let found = null;
+  snap.forEach(doc => {
+    if (found) return;
+    const data = doc.data();
+    const sl = data.statusLog || [];
+    if (sl.some(s => s.type === "event" && s.value === "내원")) {
+      found = doc.id;
+    }
+  });
+  return found;
+}
+
+/* ── 마크다운 생성 ── */
+function generateMarkdown(startDate, endDate, data) {
+  const dates = Object.keys(data).sort();
+  const days = daysBetween(startDate, endDate);
+
+  // 요약
+  const moodCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let periodDates = [];
+  const allEvents = [];
+  dates.forEach(dk => {
+    const d = data[dk];
+    (d.moods || []).forEach(m => { moodCounts[m.mood] = (moodCounts[m.mood] || 0) + 1; });
+    if (d.periodStart) periodDates.push(dk);
+    (d.statusLog || []).forEach(s => {
+      if (s.type === "event") allEvents.push({ date: dk, value: s.value, note: s.note });
+    });
+  });
+
+  let md = "# 컨디션 기록 (" + startDate + " ~ " + endDate + ")\n\n";
+  md += "## 요약\n";
+  md += "- 기간: " + days + "일\n";
+  md += "- 기분 분포: " + MOOD_ICONS.map(m => m.label + " " + moodCounts[m.value] + "회").join(", ") + "\n";
+  if (periodDates.length > 0) md += "- 생리 시작: " + periodDates.join(", ") + "\n";
+  if (allEvents.length > 0) md += "- 이벤트: " + allEvents.map(e => e.value + "(" + e.date + ")").join(", ") + "\n";
+  md += "\n## 날짜별 기록\n";
+
+  dates.forEach(dk => {
+    const d = data[dk];
+    const [y, m, day] = dk.split("-");
+    const dow = ["일", "월", "화", "수", "목", "금", "토"][new Date(parseInt(y), parseInt(m) - 1, parseInt(day)).getDay()];
+    md += "\n### " + dk + " (" + dow + ")\n";
+
+    if (d.moods && d.moods.length > 0) {
+      md += "- 기분: " + d.moods.map(m => (moodMap[m.mood]?.emoji || "") + " " + (moodMap[m.mood]?.label || "") + " " + formatTime(m.time) + (m.note ? " (" + m.note + ")" : "")).join(" → ") + "\n";
+    }
+    if (d.periodStart) md += "- 생리 시작일\n";
+    (d.statusLog || []).filter(s => s.type === "tag").forEach(s => {
+      md += "- 태그: " + s.value + (s.note ? " — " + s.note : "") + " (" + formatTime(s.time) + ")\n";
+    });
+    (d.statusLog || []).filter(s => s.type === "event").forEach(s => {
+      md += "- 이벤트: " + s.value + (s.note ? " — " + s.note : "") + " (" + formatTime(s.time) + ")\n";
+    });
+  });
+
+  return md;
+}
+
+function downloadMarkdown(md, startDate, endDate) {
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "condition-" + startDate + "-" + endDate + ".md";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ── 인증 게이트 ── */
+function AuthGate({ children }) {
+  const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    const unsub = fireAuth.onAuthStateChanged(u => { setUser(u); setChecking(false); });
+    return unsub;
+  }, []);
+  const doLogin = () => {
+    setErr("");
+    fireAuth.signInWithPopup(googleProvider).catch(e => {
+      setErr(e.code === "auth/popup-blocked" ? "팝업이 차단되었습니다." : e.message);
+    });
+  };
+  if (checking) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#1a1a2e", color: "#999" }}><p>확인 중...</p></div>;
+  if (!user) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, background: "#1a1a2e" }}>
+      <div style={{ fontSize: 48 }}>{"\u{1FA7A}"}</div>
+      <p style={{ fontSize: 15, color: "#999" }}>로그인이 필요합니다</p>
+      <button onClick={doLogin} style={{ padding: "10px 28px", fontSize: 14, background: "#b8a9d4", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>Google 계정으로 로그인</button>
+      {err && <p style={{ fontSize: 12, color: "#e06060" }}>{err}</p>}
+    </div>
+  );
+  return children;
+}
+
+/* ── 메인 앱 ── */
+function DoctorViewer() {
+  const today = getToday();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState(today);
+  const [rawData, setRawData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
+  const [showItems, setShowItems] = useState({});
+
+  // 초기화: 지난 내원일 찾기
+  useEffect(() => {
+    findLastVisit().then(lastVisit => {
+      const start = lastVisit || daysAgo(30);
+      setStartDate(start);
+      setInitializing(false);
+    });
+  }, []);
+
+  // 기간 변경시 데이터 로드
+  useEffect(() => {
+    if (!startDate || !endDate || initializing) return;
+    setLoading(true);
+    loadDateRange(startDate, endDate).then(data => {
+      setRawData(data);
+      setLoading(false);
+    });
+  }, [startDate, endDate, initializing]);
+
+  const sortedDates = useMemo(() => Object.keys(rawData).sort().reverse(), [rawData]);
+  const days = startDate && endDate ? daysBetween(startDate, endDate) : 0;
+
+  // 요약 통계
+  const summary = useMemo(() => {
+    const moodCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalMoods = 0;
+    const periodDates = [];
+    const eventSet = new Set();
+    const tagSet = new Set();
+
+    sortedDates.forEach(dk => {
+      const d = rawData[dk];
+      (d.moods || []).forEach(m => { moodCounts[m.mood]++; totalMoods++; });
+      if (d.periodStart) periodDates.push(dk);
+      (d.statusLog || []).forEach(s => {
+        if (s.type === "event") eventSet.add(s.value);
+        if (s.type === "tag") tagSet.add(s.value);
+      });
+    });
+
+    return { moodCounts, totalMoods, periodDates, events: [...eventSet], tags: [...tagSet] };
+  }, [rawData, sortedDates]);
+
+  const setPreset = (type) => {
+    if (type === "1w") setStartDate(daysAgo(7));
+    else if (type === "2w") setStartDate(daysAgo(14));
+    else if (type === "1m") setStartDate(daysAgo(30));
+    else if (type === "visit") {
+      findLastVisit().then(lv => setStartDate(lv || daysAgo(30)));
+    }
+    setEndDate(today);
+  };
+
+  const toggleItems = (dk) => setShowItems(prev => ({ ...prev, [dk]: !prev[dk] }));
+
+  const handlePrint = () => window.print();
+  const handleDownloadMd = () => {
+    const md = generateMarkdown(startDate, endDate, rawData);
+    downloadMarkdown(md, startDate, endDate);
+  };
+
+  if (initializing) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#1a1a2e", color: "#999" }}><p>준비 중...</p></div>;
+
+  return (
+    <div style={S.container}>
+      {/* 헤더 */}
+      <div style={S.header} className="no-print">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <h1 style={S.title} onClick={() => { if (confirm("로그아웃할까요?")) fireAuth.signOut(); }}>Condition Viewer</h1>
+            <p style={{ fontSize: 13, color: "#888" }}>진료 준비용 컨디션 뷰어</p>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={handleDownloadMd} style={S.actionBtn} title="마크다운 다운로드">{"\u{1F4C4}"} .md</button>
+            <button onClick={handlePrint} style={S.actionBtn} title="PDF 인쇄">{"\u{1F5A8}\uFE0F"} 인쇄</button>
+          </div>
+        </div>
+
+        {/* 기간 필터 */}
+        <div style={S.filterRow}>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={S.dateInput} />
+          <span style={{ color: "#888" }}>~</span>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={S.dateInput} />
+        </div>
+        <div style={S.presetRow}>
+          {[
+            { id: "visit", label: "지난 진료 이후" },
+            { id: "1w", label: "1주" },
+            { id: "2w", label: "2주" },
+            { id: "1m", label: "1개월" },
+          ].map(p => (
+            <button key={p.id} onClick={() => setPreset(p.id)} style={S.presetBtn}>{p.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 인쇄용 헤더 */}
+      <div className="print-only" style={{ display: "none", padding: "20px", textAlign: "center" }}>
+        <h1 style={{ fontSize: 20, marginBottom: 4 }}>컨디션 기록</h1>
+        <p style={{ fontSize: 14, color: "#666" }}>{startDate} ~ {endDate} ({days}일)</p>
+      </div>
+
+      {/* 콘텐츠 */}
+      <div style={S.content}>
+        {/* 요약 */}
+        <div style={S.summaryBox} className="summary-box">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>기간 요약</span>
+            <span style={{ fontSize: 12, color: "#888" }}>{startDate} ~ {endDate} ({days}일)</span>
+          </div>
+
+          {/* 기분 분포 */}
+          {summary.totalMoods > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>기분 분포</span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {MOOD_ICONS.map(m => summary.moodCounts[m.value] > 0 && (
+                  <span key={m.value} style={{ fontSize: 13, color: "#ccc" }}>{m.emoji} ×{summary.moodCounts[m.value]}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {summary.periodDates.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: "#999" }}>{"\u{1FA78}"} 생리 시작: </span>
+              <span style={{ fontSize: 12, color: "#ccc" }}>{summary.periodDates.join(", ")}</span>
+            </div>
+          )}
+
+          {summary.events.length > 0 && (
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: "#999" }}>이벤트: </span>
+              {summary.events.map(e => <span key={e} style={S.summaryEvent}>{e}</span>)}
+            </div>
+          )}
+
+          {summary.tags.length > 0 && (
+            <div>
+              <span style={{ fontSize: 12, color: "#999" }}>태그: </span>
+              {summary.tags.map(t => <span key={t} style={S.summaryTag}>{t}</span>)}
+            </div>
+          )}
+        </div>
+
+        {/* 로딩 / 빈 상태 */}
+        {loading ? (
+          <div style={S.empty}><p style={{ color: "#888", fontSize: 14 }}>불러오는 중...</p></div>
+        ) : sortedDates.length === 0 ? (
+          <div style={S.empty}>
+            <span style={{ fontSize: 32, marginBottom: 12 }}>{"\u{1F4CB}"}</span>
+            <p style={{ color: "#777", fontSize: 14 }}>이 기간에는 기록이 없어요</p>
+          </div>
+        ) : (
+          /* 타임라인 */
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {sortedDates.map(dk => {
+              const d = rawData[dk];
+              const moods = d.moods || [];
+              const tags = (d.statusLog || []).filter(s => s.type === "tag");
+              const events = (d.statusLog || []).filter(s => s.type === "event");
+              const items = d.items || [];
+              const hasContent = moods.length > 0 || d.periodStart || tags.length > 0 || events.length > 0;
+
+              if (!hasContent && items.length === 0) return null;
+
+              return (
+                <div key={dk} className="fade-in day-card" style={S.dayCard}>
+                  {/* 날짜 헤더 */}
+                  <div style={S.dayHeader}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{formatDateLabel(dk)}</span>
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      {moods.length > 0 && <span style={{ fontSize: 14 }}>{moodMap[moods[moods.length - 1].mood]?.emoji}</span>}
+                      {d.periodStart && <span style={{ fontSize: 12 }}>{"\u{1FA78}"}</span>}
+                    </div>
+                  </div>
+
+                  {/* 기분 */}
+                  {moods.length > 0 && (
+                    <div style={S.section}>
+                      {moods.map((m, i) => (
+                        <div key={i} style={S.timelineRow}>
+                          <span style={{ fontSize: 15, flexShrink: 0 }}>{moodMap[m.mood]?.emoji}</span>
+                          <span style={{ fontSize: 13, color: "#b8a9d4", flexShrink: 0, width: 68 }}>{moodMap[m.mood]?.label}</span>
+                          {m.note ? <span style={{ flex: 1, fontSize: 13, color: "#aaa" }}>— {m.note}</span> : <span style={{ flex: 1 }} />}
+                          <span style={S.timeLabel}>{formatTime(m.time)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 생리 */}
+                  {d.periodStart && (
+                    <div style={{ ...S.section, padding: "6px 14px" }}>
+                      <span style={{ fontSize: 13, color: "#e86464" }}>{"\u{1FA78}"} 생리 시작일</span>
+                    </div>
+                  )}
+
+                  {/* 태그 */}
+                  {tags.length > 0 && (
+                    <div style={S.section}>
+                      {tags.map((s, i) => (
+                        <div key={i} style={S.timelineRow}>
+                          <span style={{ fontSize: 12, color: "#b8a9d4", flexShrink: 0 }}>태그</span>
+                          <span style={{ fontSize: 13, color: "#ccc", flexShrink: 0 }}>{s.value}</span>
+                          {s.note ? <span style={{ flex: 1, fontSize: 13, color: "#aaa" }}>— {s.note}</span> : <span style={{ flex: 1 }} />}
+                          <span style={S.timeLabel}>{formatTime(s.time)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 이벤트 */}
+                  {events.length > 0 && (
+                    <div style={S.section}>
+                      {events.map((s, i) => (
+                        <div key={i} style={S.timelineRow}>
+                          <span style={{ fontSize: 12, color: "#e8927c", flexShrink: 0 }}>이벤트</span>
+                          <span style={{ fontSize: 13, color: "#ccc", flexShrink: 0 }}>{s.value}</span>
+                          {s.note ? <span style={{ flex: 1, fontSize: 13, color: "#aaa" }}>— {s.note}</span> : <span style={{ flex: 1 }} />}
+                          <span style={S.timeLabel}>{formatTime(s.time)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 한 일 토글 */}
+                  {items.length > 0 && (
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }} className="no-print">
+                      <button onClick={() => toggleItems(dk)} style={S.itemsToggle}>
+                        {showItems[dk] ? "▼" : "▶"} 한 일 보기 ({items.length}건)
+                      </button>
+                      {showItems[dk] && (
+                        <div style={{ padding: "0 14px 10px" }}>
+                          {items.map(item => (
+                            <div key={item.id || item.timestamp} style={{ display: "flex", gap: 8, padding: "4px 0", fontSize: 13 }}>
+                              <span style={{ color: "#888", flexShrink: 0 }}>{formatTime(item.timestamp)}</span>
+                              <span style={{ color: "#aaa" }}>{item.memo}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── 스타일 ── */
+const S = {
+  container: { fontFamily: "'Noto Sans KR', sans-serif", background: "linear-gradient(170deg, #1a1a2e 0%, #16213e 40%, #1a1a2e 100%)", minHeight: "100vh", color: "#e0e0e0", maxWidth: 580, margin: "0 auto" },
+  header: { padding: "28px 20px 0", background: "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%)" },
+  title: { fontSize: 24, fontWeight: 600, color: "#f0f0f0", letterSpacing: "-0.5px", marginBottom: 4, cursor: "pointer" },
+  content: { padding: "20px 20px 40px" },
+
+  actionBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#aaa", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+
+  filterRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
+  dateInput: { flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", color: "#e0e0e0", fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif", outline: "none" },
+  presetRow: { display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" },
+  presetBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#aaa", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+
+  summaryBox: { background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "16px 18px", marginBottom: 16, borderLeft: "3px solid #b8a9d4" },
+  summaryTag: { fontSize: 11, color: "#b8a9d4", background: "rgba(184,169,212,0.15)", padding: "1px 7px", borderRadius: 6, marginLeft: 4 },
+  summaryEvent: { fontSize: 11, color: "#e8927c", background: "rgba(232,146,124,0.15)", padding: "1px 7px", borderRadius: 6, marginLeft: 4 },
+
+  empty: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" },
+
+  dayCard: { background: "rgba(255,255,255,0.02)", borderRadius: 12, overflow: "hidden" },
+  dayHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "rgba(255,255,255,0.03)" },
+  section: { display: "flex", flexDirection: "column", gap: 2, padding: "6px 14px" },
+  timelineRow: { display: "flex", alignItems: "center", gap: 8, padding: "4px 0" },
+  timeLabel: { fontSize: 11, color: "#666", flexShrink: 0 },
+  itemsToggle: { width: "100%", background: "none", border: "none", padding: "10px 14px", fontSize: 12, color: "#888", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", textAlign: "left" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AuthGate><DoctorViewer /></AuthGate>);
+</script>
+</body>
+</html>
