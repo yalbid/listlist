@@ -51,6 +51,14 @@ const fireDb=firebaseApp.firestore();
 const fireAuth=firebaseApp.auth();
 const googleProvider=new firebase.auth.GoogleAuthProvider();
 
+const MOOD_ICONS = [
+  { value: 1, emoji: "\u{1F622}", label: "매우 안좋음" },
+  { value: 2, emoji: "\u{1F614}", label: "안좋음" },
+  { value: 3, emoji: "\u{1F610}", label: "보통" },
+  { value: 4, emoji: "\u{1F60A}", label: "좋음" },
+  { value: 5, emoji: "\u{1F604}", label: "매우 좋음" },
+];
+
 const CATEGORIES = [
   { id: "manga", label: "만화", emoji: "📖", color: "#e8927c" },
   { id: "illust", label: "일러스트", emoji: "🎨", color: "#d4a574" },
@@ -76,20 +84,27 @@ function formatTime(ts) {
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
-async function loadEntriesFromFirebase(dateKey) {
+async function loadDailyData(dateKey) {
   try {
     const doc = await fireDb.collection("dailyLogEntries").doc(dateKey).get();
-    if (!doc.exists) return [];
+    if (!doc.exists) return { entries: [], moods: [] };
     const data = doc.data();
-    if (data.items) return JSON.parse(data.items);
-    if (data.entries) return data.entries;
-    return [];
-  } catch (e) { console.warn("Firebase load failed:", e); return []; }
+    let entries = [];
+    if (data.items) { try { entries = JSON.parse(data.items); } catch(e) {} }
+    else if (data.entries) { entries = data.entries; }
+    const moods = data.moods || [];
+    return { entries, moods };
+  } catch (e) { console.warn("Firebase load failed:", e); return { entries: [], moods: [] }; }
 }
 
 function saveEntriesToFirebase(dateKey, entries) {
-  fireDb.collection("dailyLogEntries").doc(dateKey).set({ items: JSON.stringify(entries) })
+  fireDb.collection("dailyLogEntries").doc(dateKey).set({ items: JSON.stringify(entries) }, { merge: true })
     .catch(e => console.warn("Firebase save failed:", e));
+}
+
+function saveMoodsToFirebase(dateKey, moods) {
+  fireDb.collection("dailyLogEntries").doc(dateKey).set({ moods }, { merge: true })
+    .catch(e => console.warn("Firebase mood save failed:", e));
 }
 
 /* ── 작업 통계 탭 컴포넌트 ── */
@@ -500,6 +515,7 @@ function AuthGate({children}){
 function DailyLog() {
   const today = getTodayForLog();
   const [entries, setEntries] = useState([]);
+  const [moods, setMoods] = useState([]);
   const [selectedCat, setSelectedCat] = useState(null);
   const [memo, setMemo] = useState("");
   const [view, setView] = useState("log");
@@ -507,10 +523,19 @@ function DailyLog() {
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef(null);
 
+  const currentMood = moods.length > 0 ? moods[moods.length - 1] : null;
+
+  const selectMood = (value) => {
+    const newMoods = [...moods, { mood: value, time: Date.now() }];
+    setMoods(newMoods);
+    saveMoodsToFirebase(today, newMoods);
+  };
+
   // 처음 열 때 파이어베이스에서 불러오기
   useEffect(() => {
-    loadEntriesFromFirebase(today).then(data => {
-      setEntries(data);
+    loadDailyData(today).then(data => {
+      setEntries(data.entries);
+      setMoods(data.moods);
       setLoaded(true);
     });
   }, []);
@@ -567,6 +592,28 @@ function DailyLog() {
       <div style={styles.content}>
         {view === "log" ? (
           <>
+            {/* Mood Selector */}
+            <div style={styles.moodSection}>
+              <p style={styles.moodTitle}>오늘의 기분</p>
+              <div style={styles.moodRow}>
+                {MOOD_ICONS.map(m => (
+                  <button key={m.value} onClick={() => selectMood(m.value)} style={{
+                    ...styles.moodBtn,
+                    background: currentMood && currentMood.mood === m.value ? "rgba(184,169,212,0.25)" : "transparent",
+                    boxShadow: currentMood && currentMood.mood === m.value ? "0 0 0 2px #b8a9d4" : "none",
+                  }}>
+                    <span style={{ fontSize: 28 }}>{m.emoji}</span>
+                  </button>
+                ))}
+              </div>
+              {currentMood && (
+                <p style={styles.moodCurrent}>
+                  {MOOD_ICONS.find(m => m.value === currentMood.mood)?.label} · {formatTime(currentMood.time)}
+                  {moods.length > 1 && <span style={{ color: "#666" }}> ({moods.length}번째)</span>}
+                </p>
+              )}
+            </div>
+
             {/* Category Selector */}
             <div style={styles.catRow}>
               {CATEGORIES.map(cat => (
@@ -718,6 +765,11 @@ const styles = {
   tab: { flex: 1, border: "none", background: "transparent", color: "#888", fontSize: 14, fontWeight: 500, padding: "10px 0", borderRadius: 8, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
   tabActive: { background: "rgba(255,255,255,0.08)", color: "#e0e0e0" },
   content: { padding: "20px 20px 40px" },
+  moodSection: { background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "14px 16px", marginBottom: 16 },
+  moodTitle: { fontSize: 13, color: "#999", marginBottom: 10, fontWeight: 500 },
+  moodRow: { display: "flex", justifyContent: "space-around", gap: 4 },
+  moodBtn: { border: "none", borderRadius: 12, padding: "8px 12px", cursor: "pointer", transition: "all 0.15s" },
+  moodCurrent: { textAlign: "center", fontSize: 12, color: "#b8a9d4", marginTop: 8 },
   catRow: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 },
   catBtn: { display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
   inputRow: { display: "flex", gap: 8, marginBottom: 24 },
