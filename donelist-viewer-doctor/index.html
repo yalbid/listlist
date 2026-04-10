@@ -128,19 +128,23 @@ async function loadDateRange(startDate, endDate) {
 }
 
 async function findLastVisit() {
-  const snap = await fireDb.collection("dailyLogEntries")
-    .orderBy(firebase.firestore.FieldPath.documentId(), "desc")
-    .limit(200).get();
-  let found = null;
-  snap.forEach(doc => {
-    if (found) return;
-    const data = doc.data();
-    const sl = data.statusLog || [];
-    if (sl.some(s => s.type === "event" && s.value === "내원")) {
-      found = doc.id;
-    }
-  });
-  return found;
+  try {
+    const snap = await fireDb.collection("dailyLogEntries").get();
+    const dates = [];
+    snap.forEach(doc => {
+      const data = doc.data();
+      const sl = data.statusLog || [];
+      if (sl.some(s => s.type === "event" && s.value === "내원")) {
+        dates.push(doc.id);
+      }
+    });
+    if (dates.length === 0) return null;
+    dates.sort();
+    return dates[dates.length - 1];
+  } catch (e) {
+    console.warn("findLastVisit failed:", e);
+    return null;
+  }
 }
 
 /* ── 마크다운 생성 ── */
@@ -242,8 +246,10 @@ function DoctorViewer() {
   // 초기화: 지난 내원일 찾기
   useEffect(() => {
     findLastVisit().then(lastVisit => {
-      const start = lastVisit || daysAgo(30);
-      setStartDate(start);
+      setStartDate(lastVisit || daysAgo(30));
+      setInitializing(false);
+    }).catch(() => {
+      setStartDate(daysAgo(30));
       setInitializing(false);
     });
   }, []);
@@ -254,6 +260,10 @@ function DoctorViewer() {
     setLoading(true);
     loadDateRange(startDate, endDate).then(data => {
       setRawData(data);
+      setLoading(false);
+    }).catch(e => {
+      console.warn("Data load failed:", e);
+      setRawData({});
       setLoading(false);
     });
   }, [startDate, endDate, initializing]);
