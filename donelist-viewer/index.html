@@ -53,6 +53,17 @@ const fireDb = firebaseApp.firestore();
 const fireAuth = firebaseApp.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
+/* ── 기분 아이콘 ── */
+const MOOD_ICONS = [
+  { value: 1, emoji: "\u{1F622}", label: "매우 안좋음" },
+  { value: 2, emoji: "\u{1F614}", label: "안좋음" },
+  { value: 3, emoji: "\u{1F610}", label: "보통" },
+  { value: 4, emoji: "\u{1F60A}", label: "좋음" },
+  { value: 5, emoji: "\u{1F604}", label: "매우 좋음" },
+];
+const moodMap = {};
+MOOD_ICONS.forEach(m => { moodMap[m.value] = m; });
+
 /* ── 카테고리 ── */
 const CATEGORIES = [
   { id: "manga", label: "만화", emoji: "\u{1F4D6}", color: "#e8927c" },
@@ -170,6 +181,18 @@ function formatTime(ts) {
 }
 
 /* ── Firebase 데이터 로드 ── */
+function parseDocData(data) {
+  let items = [];
+  if (data.items) { try { items = JSON.parse(data.items); } catch(e) {} }
+  else if (data.entries) { items = data.entries; }
+  return {
+    items,
+    moods: data.moods || [],
+    periodStart: data.periodStart || false,
+    statusLog: data.statusLog || [],
+  };
+}
+
 async function loadDateRange(startDate, endDate) {
   const snap = await fireDb.collection("dailyLogEntries")
     .where(firebase.firestore.FieldPath.documentId(), ">=", startDate)
@@ -177,14 +200,10 @@ async function loadDateRange(startDate, endDate) {
     .get();
   const result = {};
   snap.forEach(doc => {
-    const data = doc.data();
-    let items = [];
-    if (data.items) {
-      try { items = JSON.parse(data.items); } catch(e) {}
-    } else if (data.entries) {
-      items = data.entries;
+    const parsed = parseDocData(doc.data());
+    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart) {
+      result[doc.id] = parsed;
     }
-    if (items.length > 0) result[doc.id] = items;
   });
   return result;
 }
@@ -193,16 +212,30 @@ async function loadAll() {
   const snap = await fireDb.collection("dailyLogEntries").get();
   const result = {};
   snap.forEach(doc => {
-    const data = doc.data();
-    let items = [];
-    if (data.items) {
-      try { items = JSON.parse(data.items); } catch(e) {}
-    } else if (data.entries) {
-      items = data.entries;
+    const parsed = parseDocData(doc.data());
+    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart) {
+      result[doc.id] = parsed;
     }
-    if (items.length > 0) result[doc.id] = items;
   });
   return result;
+}
+
+async function loadTagConfig() {
+  try {
+    const doc = await fireDb.collection("dailyLogMeta").doc("tagConfig").get();
+    if (!doc.exists) return { tags: ["친구", "가족", "마감", "동인행사", "입금일"], events: ["내원", "통증", "약변경"] };
+    return doc.data();
+  } catch(e) { return { tags: ["친구", "가족", "마감", "동인행사", "입금일"], events: ["내원", "통증", "약변경"] }; }
+}
+
+function saveTagConfig(config) {
+  fireDb.collection("dailyLogMeta").doc("tagConfig").set(config)
+    .catch(e => console.warn("tagConfig save failed:", e));
+}
+
+function saveDayStatus(dateKey, fields) {
+  fireDb.collection("dailyLogEntries").doc(dateKey).set(fields, { merge: true })
+    .catch(e => console.warn("status save failed:", e));
 }
 
 /* ── 인증 게이트 ── */
@@ -243,6 +276,7 @@ function AuthGate({ children }) {
 /* ── 메인 앱 ── */
 function DonelistViewer() {
   const today = getLogDate();
+  const todayKey = dateStr(today.y, today.m, today.d);
 
   // 뷰 모드: week, month, year, all
   const [viewMode, setViewMode] = useState("week");
@@ -269,6 +303,85 @@ function DonelistViewer() {
 
   // 접기/펼치기 (날짜별)
   const [collapsed, setCollapsed] = useState({});
+
+  // 오늘의 상태 패널
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [todayStatus, setTodayStatus] = useState({ moods: [], periodStart: false, statusLog: [] });
+  const [tagConfig, setTagConfig] = useState({ tags: [], events: [] });
+  const [newTag, setNewTag] = useState("");
+  const [newEvent, setNewEvent] = useState("");
+  const [editMode, setEditMode] = useState(false);
+
+  // 태그 설정 + 오늘 상태 로드
+  useEffect(() => {
+    loadTagConfig().then(setTagConfig);
+    fireDb.collection("dailyLogEntries").doc(todayKey).get().then(doc => {
+      if (doc.exists) {
+        const d = doc.data();
+        setTodayStatus({ moods: d.moods || [], periodStart: d.periodStart || false, statusLog: d.statusLog || [] });
+      }
+    });
+  }, []);
+
+  const togglePeriod = () => {
+    const next = { ...todayStatus, periodStart: !todayStatus.periodStart };
+    setTodayStatus(next);
+    saveDayStatus(todayKey, { periodStart: next.periodStart });
+    // rawData도 업데이트
+    setRawData(prev => {
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, statusLog: [] };
+      return { ...prev, [todayKey]: { ...dayData, periodStart: next.periodStart } };
+    });
+  };
+
+  const addStatusEntry = (type, value) => {
+    const entry = { type, value, time: Date.now() };
+    const next = { ...todayStatus, statusLog: [...todayStatus.statusLog, entry] };
+    setTodayStatus(next);
+    saveDayStatus(todayKey, { statusLog: next.statusLog });
+    setRawData(prev => {
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, statusLog: [] };
+      return { ...prev, [todayKey]: { ...dayData, statusLog: next.statusLog } };
+    });
+  };
+
+  const removeStatusEntry = (index) => {
+    const next = { ...todayStatus, statusLog: todayStatus.statusLog.filter((_, i) => i !== index) };
+    setTodayStatus(next);
+    saveDayStatus(todayKey, { statusLog: next.statusLog });
+    setRawData(prev => {
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, statusLog: [] };
+      return { ...prev, [todayKey]: { ...dayData, statusLog: next.statusLog } };
+    });
+  };
+
+  const addTagToPool = (tag) => {
+    if (!tag.trim() || tagConfig.tags.includes(tag.trim())) return;
+    const next = { ...tagConfig, tags: [...tagConfig.tags, tag.trim()] };
+    setTagConfig(next);
+    saveTagConfig(next);
+    setNewTag("");
+  };
+
+  const addEventToPool = (evt) => {
+    if (!evt.trim() || tagConfig.events.includes(evt.trim())) return;
+    const next = { ...tagConfig, events: [...tagConfig.events, evt.trim()] };
+    setTagConfig(next);
+    saveTagConfig(next);
+    setNewEvent("");
+  };
+
+  const removeTagFromPool = (tag) => {
+    const next = { ...tagConfig, tags: tagConfig.tags.filter(t => t !== tag) };
+    setTagConfig(next);
+    saveTagConfig(next);
+  };
+
+  const removeEventFromPool = (evt) => {
+    const next = { ...tagConfig, events: tagConfig.events.filter(e => e !== evt) };
+    setTagConfig(next);
+    saveTagConfig(next);
+  };
 
   // 현재 기간 정보
   const currentRange = useMemo(() => {
@@ -304,7 +417,8 @@ function DonelistViewer() {
     const allItems = [];
 
     dates.forEach(dateKey => {
-      const items = rawData[dateKey] || [];
+      const dayData = rawData[dateKey] || {};
+      const items = dayData.items || [];
       const filtered = catFilter === "all"
         ? items
         : items.filter(item => item.category === catFilter);
@@ -397,8 +511,8 @@ function DonelistViewer() {
   const catCounts = useMemo(() => {
     const counts = { all: 0 };
     CATEGORIES.forEach(c => { counts[c.id] = 0; });
-    Object.values(rawData).forEach(items => {
-      items.forEach(item => {
+    Object.values(rawData).forEach(dayData => {
+      (dayData.items || []).forEach(item => {
         counts.all++;
         if (counts[item.category] !== undefined) counts[item.category]++;
       });
@@ -441,6 +555,88 @@ function DonelistViewer() {
 
       {/* 콘텐츠 */}
       <div style={S.content}>
+
+        {/* 오늘의 상태 패널 */}
+        <div style={S.statusPanel}>
+          <div onClick={() => setStatusOpen(!statusOpen)} style={S.statusToggle}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#e0e0e0" }}>
+              {statusOpen ? "▼" : "▶"} 오늘의 상태
+            </span>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              {todayStatus.moods.length > 0 && <span style={{ fontSize: 14 }}>{moodMap[todayStatus.moods[todayStatus.moods.length - 1].mood]?.emoji}</span>}
+              {todayStatus.periodStart && <span style={{ fontSize: 12 }}>{"\u{1FA78}"}</span>}
+              {todayStatus.statusLog.filter(s => s.type === "tag").length > 0 && <span style={{ fontSize: 11, color: "#b8a9d4" }}>{[...new Set(todayStatus.statusLog.filter(s => s.type === "tag").map(s => s.value))].join(" ")}</span>}
+            </div>
+          </div>
+
+          {statusOpen && (
+            <div style={S.statusBody}>
+              {/* 생리주기 토글 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <button onClick={togglePeriod} style={{
+                  ...S.periodBtn,
+                  background: todayStatus.periodStart ? "rgba(232,100,100,0.2)" : "rgba(255,255,255,0.06)",
+                  borderColor: todayStatus.periodStart ? "#e86464" : "rgba(255,255,255,0.1)",
+                  color: todayStatus.periodStart ? "#e86464" : "#888",
+                }}>{"\u{1FA78}"} 생리 시작일</button>
+              </div>
+
+              {/* 태그 */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: "#999" }}>태그</span>
+                  <button onClick={() => setEditMode(!editMode)} style={{ background: "none", border: "none", color: "#888", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{editMode ? "완료" : "편집"}</button>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {tagConfig.tags.map(tag => (
+                    <div key={tag} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <button onClick={() => addStatusEntry("tag", tag)} style={S.tagBtn}>{tag}</button>
+                      {editMode && <button onClick={() => removeTagFromPool(tag)} style={S.removePoolBtn}>×</button>}
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <input value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => e.key === "Enter" && addTagToPool(newTag)}
+                      placeholder="+" style={S.tagInput} />
+                  </div>
+                </div>
+              </div>
+
+              {/* 이벤트 */}
+              <div style={{ marginBottom: 12 }}>
+                <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 6 }}>이벤트</span>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {tagConfig.events.map(evt => (
+                    <div key={evt} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <button onClick={() => addStatusEntry("event", evt)} style={S.eventBtn}>{evt}</button>
+                      {editMode && <button onClick={() => removeEventFromPool(evt)} style={S.removePoolBtn}>×</button>}
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <input value={newEvent} onChange={e => setNewEvent(e.target.value)} onKeyDown={e => e.key === "Enter" && addEventToPool(newEvent)}
+                      placeholder="+" style={S.tagInput} />
+                  </div>
+                </div>
+              </div>
+
+              {/* 오늘의 기록 */}
+              {todayStatus.statusLog.length > 0 && (
+                <div>
+                  <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 6 }}>오늘의 기록</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {todayStatus.statusLog.map((entry, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "4px 8px", background: "rgba(255,255,255,0.03)", borderRadius: 6 }}>
+                        <span style={{ color: entry.type === "tag" ? "#b8a9d4" : "#e8927c" }}>{entry.type === "tag" ? "태그" : "이벤트"}</span>
+                        <span style={{ color: "#ccc", flex: 1 }}>{entry.value}</span>
+                        <span style={{ color: "#666" }}>{formatTime(entry.time)}</span>
+                        <button onClick={() => removeStatusEntry(i)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, padding: "0 2px" }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* 기간 네비게이션 */}
         {viewMode !== "all" && (
@@ -496,7 +692,13 @@ function DonelistViewer() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {pagedGroups.map(group => {
                 const isCollapsed = collapsed[group.dateKey];
-                const cat = catMap;
+                const dayData = rawData[group.dateKey] || {};
+                const dayMoods = dayData.moods || [];
+                const lastMood = dayMoods.length > 0 ? dayMoods[dayMoods.length - 1] : null;
+                const dayPeriod = dayData.periodStart;
+                const dayStatusLog = dayData.statusLog || [];
+                const uniqueTags = [...new Set(dayStatusLog.filter(s => s.type === "tag").map(s => s.value))];
+                const uniqueEvents = [...new Set(dayStatusLog.filter(s => s.type === "event").map(s => s.value))];
                 return (
                   <div key={group.dateKey} className="fade-in" style={S.dateGroup}>
                     {/* 날짜 헤더 */}
@@ -504,6 +706,11 @@ function DonelistViewer() {
                       style={S.dateHeader}>
                       <span style={S.collapseIcon}>{isCollapsed ? "▶" : "▼"}</span>
                       <span style={S.dateLabel}>{formatDateLabel(group.dateKey)}</span>
+                      {lastMood && <span style={{ fontSize: 16 }} title={moodMap[lastMood.mood]?.label}>{moodMap[lastMood.mood]?.emoji}</span>}
+                      {dayPeriod && <span style={{ fontSize: 13 }} title="생리 시작일">{"\u{1FA78}"}</span>}
+                      {uniqueTags.map(t => <span key={t} style={S.headerTag}>{t}</span>)}
+                      {uniqueEvents.map(e => <span key={e} style={S.headerEvent}>{e}</span>)}
+                      <span style={{ flex: 1 }} />
                       <span style={S.dateCount}>{group.items.length}건</span>
                     </div>
 
@@ -626,6 +833,15 @@ const S = {
 
   content: { padding: "20px 20px 40px" },
 
+  statusPanel: { marginBottom: 16, background: "rgba(255,255,255,0.03)", borderRadius: 12, overflow: "hidden" },
+  statusToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none" },
+  statusBody: { padding: "0 16px 16px" },
+  periodBtn: { border: "1px solid", borderRadius: 8, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 500 },
+  tagBtn: { background: "rgba(184,169,212,0.15)", border: "1px solid rgba(184,169,212,0.3)", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#b8a9d4", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  eventBtn: { background: "rgba(232,146,124,0.15)", border: "1px solid rgba(232,146,124,0.3)", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#e8927c", cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" },
+  tagInput: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "4px 8px", fontSize: 12, color: "#e0e0e0", width: 50, fontFamily: "'Noto Sans KR', sans-serif", outline: "none" },
+  removePoolBtn: { background: "none", border: "none", color: "#e06060", cursor: "pointer", fontSize: 14, padding: "0 2px" },
+
   periodNav: {
     display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16,
     background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "12px 16px",
@@ -657,8 +873,10 @@ const S = {
     cursor: "pointer", background: "rgba(255,255,255,0.03)", userSelect: "none",
   },
   collapseIcon: { fontSize: 10, color: "#666", width: 14 },
-  dateLabel: { fontSize: 14, fontWeight: 600, color: "#e0e0e0", flex: 1 },
-  dateCount: { fontSize: 12, color: "#888", background: "rgba(255,255,255,0.06)", padding: "2px 10px", borderRadius: 10 },
+  dateLabel: { fontSize: 14, fontWeight: 600, color: "#e0e0e0" },
+  dateCount: { fontSize: 12, color: "#888", background: "rgba(255,255,255,0.06)", padding: "2px 10px", borderRadius: 10, flexShrink: 0 },
+  headerTag: { fontSize: 11, color: "#b8a9d4", background: "rgba(184,169,212,0.15)", padding: "1px 7px", borderRadius: 6 },
+  headerEvent: { fontSize: 11, color: "#e8927c", background: "rgba(232,146,124,0.15)", padding: "1px 7px", borderRadius: 6 },
 
   itemList: { display: "flex", flexDirection: "column", gap: 1 },
   entry: {
