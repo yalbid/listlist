@@ -108,6 +108,7 @@ function parseDocData(data) {
     items,
     moods: data.moods || [],
     periodStart: data.periodStart || false,
+    periodEnd: data.periodEnd || false,
     statusLog: data.statusLog || [],
   };
 }
@@ -120,7 +121,7 @@ async function loadDateRange(startDate, endDate) {
   const result = {};
   snap.forEach(doc => {
     const parsed = parseDocData(doc.data());
-    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart) {
+    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart || parsed.periodEnd) {
       result[doc.id] = parsed;
     }
   });
@@ -154,22 +155,25 @@ function generateMarkdown(startDate, endDate, data) {
 
   // 요약
   const moodCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  let periodDates = [];
+  let periodRanges = [];
+  let currentPeriodStart = null;
   const allEvents = [];
   dates.forEach(dk => {
     const d = data[dk];
     (d.moods || []).forEach(m => { moodCounts[m.mood] = (moodCounts[m.mood] || 0) + 1; });
-    if (d.periodStart) periodDates.push(dk);
+    if (d.periodStart) currentPeriodStart = dk;
+    if (d.periodEnd && currentPeriodStart) { periodRanges.push(currentPeriodStart + " ~ " + dk); currentPeriodStart = null; }
     (d.statusLog || []).forEach(s => {
       if (s.type === "event") allEvents.push({ date: dk, value: s.value, note: s.note });
     });
   });
+  if (currentPeriodStart) periodRanges.push(currentPeriodStart + " ~ (진행 중)");
 
   let md = "# 컨디션 기록 (" + startDate + " ~ " + endDate + ")\n\n";
   md += "## 요약\n";
   md += "- 기간: " + days + "일\n";
   md += "- 기분 분포: " + MOOD_ICONS.map(m => m.label + " " + moodCounts[m.value] + "회").join(", ") + "\n";
-  if (periodDates.length > 0) md += "- 생리 시작: " + periodDates.join(", ") + "\n";
+  if (periodRanges.length > 0) md += "- 생리 기간: " + periodRanges.join(", ") + "\n";
   if (allEvents.length > 0) md += "- 이벤트: " + allEvents.map(e => e.value + "(" + e.date + ")").join(", ") + "\n";
   md += "\n## 날짜별 기록\n";
 
@@ -183,6 +187,7 @@ function generateMarkdown(startDate, endDate, data) {
       md += "- 기분: " + d.moods.map(m => (moodMap[m.mood]?.emoji || "") + " " + (moodMap[m.mood]?.label || "") + " " + formatTime(m.time) + (m.note ? " (" + m.note + ")" : "")).join(" → ") + "\n";
     }
     if (d.periodStart) md += "- 생리 시작일\n";
+    if (d.periodEnd) md += "- 생리 종료일\n";
     (d.statusLog || []).filter(s => s.type === "tag").forEach(s => {
       md += "- 태그: " + s.value + (s.note ? " — " + s.note : "") + " (" + formatTime(s.time) + ")\n";
     });
@@ -290,7 +295,7 @@ function DoctorViewer() {
       if (moods.some(m => (m.note || "").toLowerCase().includes(q))) return true;
       if (moods.some(m => (moodMap[m.mood]?.label || "").includes(q))) return true;
       if (sl.some(s => s.value.toLowerCase().includes(q) || (s.note || "").toLowerCase().includes(q))) return true;
-      if (d.periodStart && "생리".includes(q)) return true;
+      if ((d.periodStart || d.periodEnd) && "생리".includes(q)) return true;
       return false;
     });
   }, [sortedDates, rawData, searchText, filterTag]);
@@ -302,21 +307,24 @@ function DoctorViewer() {
   const summary = useMemo(() => {
     const moodCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let totalMoods = 0;
-    const periodDates = [];
+    const periodRanges = [];
+    let curStart = null;
     const eventSet = new Set();
     const tagSet = new Set();
 
     sortedDates.forEach(dk => {
       const d = rawData[dk];
       (d.moods || []).forEach(m => { moodCounts[m.mood]++; totalMoods++; });
-      if (d.periodStart) periodDates.push(dk);
+      if (d.periodStart) curStart = dk;
+      if (d.periodEnd && curStart) { periodRanges.push(curStart + " ~ " + dk); curStart = null; }
       (d.statusLog || []).forEach(s => {
         if (s.type === "event") eventSet.add(s.value);
         if (s.type === "tag") tagSet.add(s.value);
       });
     });
+    if (curStart) periodRanges.push(curStart + " ~ (진행 중)");
 
-    return { moodCounts, totalMoods, periodDates, events: [...eventSet], tags: [...tagSet] };
+    return { moodCounts, totalMoods, periodRanges, events: [...eventSet], tags: [...tagSet] };
   }, [rawData, sortedDates]);
 
   const setPreset = (type) => {
@@ -426,10 +434,10 @@ function DoctorViewer() {
             </div>
           )}
 
-          {summary.periodDates.length > 0 && (
+          {summary.periodRanges.length > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <span style={{ fontSize: 12, color: "#999" }}>{"\u{1FA78}"} 생리 시작: </span>
-              <span style={{ fontSize: 12, color: "#ccc" }}>{summary.periodDates.join(", ")}</span>
+              <span style={{ fontSize: 12, color: "#999" }}>{"\u{1FA78}"} 생리 기간: </span>
+              <span style={{ fontSize: 12, color: "#ccc" }}>{summary.periodRanges.join(", ")}</span>
             </div>
           )}
 
@@ -465,7 +473,7 @@ function DoctorViewer() {
               const tags = (d.statusLog || []).filter(s => s.type === "tag");
               const events = (d.statusLog || []).filter(s => s.type === "event");
               const items = d.items || [];
-              const hasContent = moods.length > 0 || d.periodStart || tags.length > 0 || events.length > 0;
+              const hasContent = moods.length > 0 || d.periodStart || d.periodEnd || tags.length > 0 || events.length > 0;
 
               if (!hasContent && items.length === 0) return null;
 
@@ -476,7 +484,7 @@ function DoctorViewer() {
                     <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{formatDateLabel(dk)}</span>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       {moods.length > 0 && <span style={{ fontSize: 14 }}>{moodMap[moods[moods.length - 1].mood]?.emoji}</span>}
-                      {d.periodStart && <span style={{ fontSize: 12 }}>{"\u{1FA78}"}</span>}
+                      {(d.periodStart || d.periodEnd) && <span style={{ fontSize: 12 }}>{"\u{1FA78}"}</span>}
                     </div>
                   </div>
 
@@ -498,6 +506,11 @@ function DoctorViewer() {
                   {d.periodStart && (
                     <div style={{ ...S.section, padding: "6px 14px" }}>
                       <span style={{ fontSize: 13, color: "#e86464" }}>{"\u{1FA78}"} 생리 시작일</span>
+                    </div>
+                  )}
+                  {d.periodEnd && (
+                    <div style={{ ...S.section, padding: "6px 14px" }}>
+                      <span style={{ fontSize: 13, color: "#6496e8" }}>{"\u{2705}"} 생리 종료일</span>
                     </div>
                   )}
 
