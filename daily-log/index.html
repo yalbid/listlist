@@ -526,6 +526,7 @@ function DailyLog() {
   const [view, setView] = useState("log");
   const [showToast, setShowToast] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const skipSaveRef = useRef(false);
   const inputRef = useRef(null);
 
   const currentMood = moods.length > 0 ? moods[moods.length - 1] : null;
@@ -561,18 +562,30 @@ function DailyLog() {
     saveMoodsToFirebase(today, newMoods);
   };
 
-  // 처음 열 때 파이어베이스에서 불러오기
+  // 처음 열 때 + 탭 복귀 시 파이어베이스에서 불러오기
   useEffect(() => {
     loadDailyData(today).then(data => {
       setEntries(data.entries);
       setMoods(data.moods);
       setLoaded(true);
     });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        skipSaveRef.current = true;
+        loadDailyData(today).then(data => {
+          setEntries(data.entries);
+          setMoods(data.moods);
+          setTimeout(() => { skipSaveRef.current = false; }, 0);
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   // entries가 바뀔 때마다 파이어베이스 저장
   useEffect(() => {
-    if (loaded) saveEntriesToFirebase(today, entries);
+    if (loaded && !skipSaveRef.current) saveEntriesToFirebase(today, entries);
   }, [entries, loaded]);
 
   const addEntry = () => {
