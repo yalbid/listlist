@@ -189,6 +189,7 @@ function parseDocData(data) {
     items,
     moods: data.moods || [],
     periodStart: data.periodStart || false,
+    periodEnd: data.periodEnd || false,
     statusLog: data.statusLog || [],
   };
 }
@@ -201,7 +202,7 @@ async function loadDateRange(startDate, endDate) {
   const result = {};
   snap.forEach(doc => {
     const parsed = parseDocData(doc.data());
-    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart) {
+    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart || parsed.periodEnd) {
       result[doc.id] = parsed;
     }
   });
@@ -213,7 +214,7 @@ async function loadAll() {
   const result = {};
   snap.forEach(doc => {
     const parsed = parseDocData(doc.data());
-    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart) {
+    if (parsed.items.length > 0 || parsed.moods.length > 0 || parsed.statusLog.length > 0 || parsed.periodStart || parsed.periodEnd) {
       result[doc.id] = parsed;
     }
   });
@@ -306,31 +307,59 @@ function DonelistViewer() {
 
   // 오늘의 상태 패널
   const [statusOpen, setStatusOpen] = useState(false);
-  const [todayStatus, setTodayStatus] = useState({ moods: [], periodStart: false, statusLog: [] });
+  const [todayStatus, setTodayStatus] = useState({ moods: [], periodStart: false, periodEnd: false, statusLog: [] });
   const [tagConfig, setTagConfig] = useState({ tags: [], events: [] });
   const [newTag, setNewTag] = useState("");
   const [newEvent, setNewEvent] = useState("");
   const [editMode, setEditMode] = useState(false);
 
-  // 태그 설정 + 오늘 상태 로드
+  // 생리 주기 메타 상태 (활성 여부 + 시작일)
+  const [periodMeta, setPeriodMeta] = useState({ active: false, startDate: null });
+
+  // 태그 설정 + 오늘 상태 + 생리 메타 로드
   useEffect(() => {
     loadTagConfig().then(setTagConfig);
     fireDb.collection("dailyLogEntries").doc(todayKey).get().then(doc => {
       if (doc.exists) {
         const d = doc.data();
-        setTodayStatus({ moods: d.moods || [], periodStart: d.periodStart || false, statusLog: d.statusLog || [] });
+        setTodayStatus({ moods: d.moods || [], periodStart: d.periodStart || false, periodEnd: d.periodEnd || false, statusLog: d.statusLog || [] });
       }
+    });
+    fireDb.collection("dailyLogMeta").doc("periodState").get().then(doc => {
+      if (doc.exists) setPeriodMeta(doc.data());
     });
   }, []);
 
-  const togglePeriod = () => {
-    const next = { ...todayStatus, periodStart: !todayStatus.periodStart };
+  function savePeriodMeta(meta) {
+    fireDb.collection("dailyLogMeta").doc("periodState").set(meta)
+      .catch(e => console.warn("periodMeta save failed:", e));
+  }
+
+  const togglePeriodStart = () => {
+    const newVal = !todayStatus.periodStart;
+    const next = { ...todayStatus, periodStart: newVal, periodEnd: false };
     setTodayStatus(next);
-    saveDayStatus(todayKey, { periodStart: next.periodStart });
-    // rawData도 업데이트
+    saveDayStatus(todayKey, { periodStart: newVal, periodEnd: false });
+    const meta = newVal ? { active: true, startDate: todayKey } : { active: false, startDate: null };
+    setPeriodMeta(meta);
+    savePeriodMeta(meta);
     setRawData(prev => {
-      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, statusLog: [] };
-      return { ...prev, [todayKey]: { ...dayData, periodStart: next.periodStart } };
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, periodEnd: false, statusLog: [] };
+      return { ...prev, [todayKey]: { ...dayData, periodStart: newVal, periodEnd: false } };
+    });
+  };
+
+  const togglePeriodEnd = () => {
+    const newVal = !todayStatus.periodEnd;
+    const next = { ...todayStatus, periodEnd: newVal };
+    setTodayStatus(next);
+    saveDayStatus(todayKey, { periodEnd: newVal });
+    const meta = newVal ? { active: false, startDate: null } : { active: true, startDate: periodMeta.startDate || todayKey };
+    setPeriodMeta(meta);
+    savePeriodMeta(meta);
+    setRawData(prev => {
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, periodEnd: false, statusLog: [] };
+      return { ...prev, [todayKey]: { ...dayData, periodEnd: newVal } };
     });
   };
 
@@ -352,7 +381,7 @@ function DonelistViewer() {
     setTodayStatus(next);
     saveDayStatus(todayKey, { statusLog: next.statusLog });
     setRawData(prev => {
-      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, statusLog: [] };
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, periodEnd: false, statusLog: [] };
       return { ...prev, [todayKey]: { ...dayData, statusLog: next.statusLog } };
     });
     setPendingStatus(null);
@@ -369,7 +398,7 @@ function DonelistViewer() {
     setTodayStatus(next);
     saveDayStatus(todayKey, { statusLog: next.statusLog });
     setRawData(prev => {
-      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, statusLog: [] };
+      const dayData = prev[todayKey] || { items: [], moods: [], periodStart: false, periodEnd: false, statusLog: [] };
       return { ...prev, [todayKey]: { ...dayData, statusLog: next.statusLog } };
     });
   };
@@ -427,6 +456,30 @@ function DonelistViewer() {
     };
     doLoad();
   }, [viewMode, currentRange.start, currentRange.end]);
+
+  // 생리 기간 계산: 시작~종료 사이 모든 날짜를 'start'|'end'|'ongoing'으로 매핑
+  const periodDays = useMemo(() => {
+    const allDates = Object.keys(rawData).sort();
+    const result = {}; // dateKey -> 'start' | 'end' | 'ongoing'
+    // 현재 뷰 범위 이전에 시작된 생리가 있는지 확인
+    let inPeriod = false;
+    if (periodMeta.active && periodMeta.startDate && allDates.length > 0 && periodMeta.startDate < allDates[0]) {
+      inPeriod = true;
+    }
+    for (const date of allDates) {
+      const day = rawData[date];
+      if (day.periodStart) {
+        inPeriod = true;
+        result[date] = 'start';
+      } else if (day.periodEnd) {
+        result[date] = 'end';
+        inPeriod = false;
+      } else if (inPeriod) {
+        result[date] = 'ongoing';
+      }
+    }
+    return result;
+  }, [rawData, periodMeta]);
 
   // 필터링된 아이템 (날짜별 그룹)
   const { dateGroups, totalItems, filteredItems } = useMemo(() => {
@@ -583,7 +636,7 @@ function DonelistViewer() {
             </span>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               {todayStatus.moods.length > 0 && <span style={{ fontSize: 14 }}>{moodMap[todayStatus.moods[todayStatus.moods.length - 1].mood]?.emoji}</span>}
-              {todayStatus.periodStart && <span style={{ fontSize: 12 }}>{"\u{1FA78}"}</span>}
+              {(todayStatus.periodStart || periodMeta.active) && <span style={{ fontSize: 12 }}>{"\u{1FA78}"}</span>}
               {todayStatus.statusLog.filter(s => s.type === "tag").length > 0 && <span style={{ fontSize: 11, color: "#b8a9d4" }}>{[...new Set(todayStatus.statusLog.filter(s => s.type === "tag").map(s => s.value))].join(" ")}</span>}
             </div>
           </div>
@@ -591,13 +644,34 @@ function DonelistViewer() {
           {statusOpen && (
             <div style={S.statusBody}>
               {/* 생리주기 토글 */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <button onClick={togglePeriod} style={{
-                  ...S.periodBtn,
-                  background: todayStatus.periodStart ? "rgba(232,100,100,0.2)" : "rgba(255,255,255,0.06)",
-                  borderColor: todayStatus.periodStart ? "#e86464" : "rgba(255,255,255,0.1)",
-                  color: todayStatus.periodStart ? "#e86464" : "#888",
-                }}>{"\u{1FA78}"} 생리 시작일</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                {!periodMeta.active ? (
+                  <button onClick={togglePeriodStart} style={{
+                    ...S.periodBtn,
+                    background: todayStatus.periodStart ? "rgba(232,100,100,0.2)" : "rgba(255,255,255,0.06)",
+                    borderColor: todayStatus.periodStart ? "#e86464" : "rgba(255,255,255,0.1)",
+                    color: todayStatus.periodStart ? "#e86464" : "#888",
+                  }}>{"\u{1FA78}"} 생리 시작일</button>
+                ) : (
+                  <>
+                    {todayStatus.periodStart ? (
+                      <button onClick={togglePeriodStart} style={{
+                        ...S.periodBtn,
+                        background: "rgba(232,100,100,0.2)",
+                        borderColor: "#e86464",
+                        color: "#e86464",
+                      }}>{"\u{1FA78}"} 생리 시작일</button>
+                    ) : (
+                      <span style={{ fontSize: 13, color: "#e86464", fontWeight: 500 }}>{"\u{1FA78}"} 생리 중{periodMeta.startDate ? " (" + periodMeta.startDate.slice(5).replace("-", "/") + "~)" : ""}</span>
+                    )}
+                    <button onClick={togglePeriodEnd} style={{
+                      ...S.periodBtn,
+                      background: todayStatus.periodEnd ? "rgba(100,150,232,0.2)" : "rgba(255,255,255,0.06)",
+                      borderColor: todayStatus.periodEnd ? "#6496e8" : "rgba(255,255,255,0.1)",
+                      color: todayStatus.periodEnd ? "#6496e8" : "#888",
+                    }}>{"\u{2705}"} 생리 종료일</button>
+                  </>
+                )}
               </div>
 
               {/* 태그 */}
@@ -732,7 +806,7 @@ function DonelistViewer() {
                 const dayData = rawData[group.dateKey] || {};
                 const dayMoods = dayData.moods || [];
                 const lastMood = dayMoods.length > 0 ? dayMoods[dayMoods.length - 1] : null;
-                const dayPeriod = dayData.periodStart;
+                const dayPeriod = periodDays[group.dateKey];
                 const dayStatusLog = dayData.statusLog || [];
                 const uniqueTags = [...new Set(dayStatusLog.filter(s => s.type === "tag").map(s => s.value))];
                 const uniqueEvents = [...new Set(dayStatusLog.filter(s => s.type === "event").map(s => s.value))];
@@ -744,7 +818,9 @@ function DonelistViewer() {
                       <span style={S.collapseIcon}>{isCollapsed ? "▶" : "▼"}</span>
                       <span style={S.dateLabel}>{formatDateLabel(group.dateKey)}</span>
                       {lastMood && <span style={{ fontSize: 16 }} title={(moodMap[lastMood.mood]?.label || "") + (lastMood.note ? " — " + lastMood.note : "")}>{moodMap[lastMood.mood]?.emoji}</span>}
-                      {dayPeriod && <span style={{ fontSize: 13 }} title="생리 시작일">{"\u{1FA78}"}</span>}
+                      {dayPeriod === 'start' && <span style={{ fontSize: 13 }} title="생리 시작일">{"\u{1FA78}"}</span>}
+                      {dayPeriod === 'ongoing' && <span style={{ fontSize: 13, opacity: 0.6 }} title="생리 중">{"\u{1FA78}"}</span>}
+                      {dayPeriod === 'end' && <span style={{ fontSize: 13 }} title="생리 종료일">{"\u{2705}"}</span>}
                       {uniqueTags.map(t => <span key={t} style={S.headerTag}>{t}</span>)}
                       {uniqueEvents.map(e => <span key={e} style={S.headerEvent}>{e}</span>)}
                       <span style={{ flex: 1 }} />
