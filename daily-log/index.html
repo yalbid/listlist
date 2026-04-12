@@ -100,11 +100,16 @@ async function loadDailyData(dateKey) {
   } catch (e) { console.warn("Firebase load failed:", e); return { entries: [], moods: [] }; }
 }
 
-function saveDailyToFirebase(dateKey, entries, moods) {
-  const data = { items: JSON.stringify(entries), moods: moods };
-  fireDb.collection("dailyLogEntries").doc(dateKey).set(data, { merge: true })
-    .then(() => console.log("Firebase saved:", dateKey))
-    .catch(e => console.warn("Firebase save failed:", e));
+function saveEntriesToFirebase(dateKey, entries) {
+  fireDb.collection("dailyLogEntries").doc(dateKey).set({ items: JSON.stringify(entries) }, { merge: true })
+    .then(() => console.log("Firebase entries saved:", dateKey))
+    .catch(e => console.warn("Firebase entries save failed:", e));
+}
+
+function saveMoodsToFirebase(dateKey, moods) {
+  fireDb.collection("dailyLogEntries").doc(dateKey).set({ moods: moods }, { merge: true })
+    .then(() => console.log("Firebase moods saved:", dateKey))
+    .catch(e => console.warn("Firebase moods save failed:", e));
 }
 
 /* ── 작업 통계 탭 컴포넌트 ── */
@@ -542,7 +547,7 @@ function DailyLog() {
     setMoods(newMoods);
     setPendingMood(null);
     setMoodNote("");
-    saveDailyToFirebase(today, entries, newMoods);
+    saveMoodsToFirebase(today, newMoods);
   };
 
   const cancelMood = () => {
@@ -553,7 +558,7 @@ function DailyLog() {
   const removeMood = (index) => {
     const newMoods = moods.filter((_, i) => i !== index);
     setMoods(newMoods);
-    saveDailyToFirebase(today, entries, newMoods);
+    saveMoodsToFirebase(today, newMoods);
   };
 
   // 처음 열 때 파이어베이스에서 불러오기
@@ -567,7 +572,7 @@ function DailyLog() {
 
   // entries가 바뀔 때마다 파이어베이스 저장
   useEffect(() => {
-    if (loaded) saveDailyToFirebase(today, entries, moods);
+    if (loaded) saveEntriesToFirebase(today, entries);
   }, [entries, loaded]);
 
   const addEntry = () => {
