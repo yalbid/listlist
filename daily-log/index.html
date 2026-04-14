@@ -518,7 +518,7 @@ function AuthGate({children}){
   return children;
 }
 function DailyLog() {
-  const today = getTodayForLog();
+  const [today, setToday] = useState(getTodayForLog);
   const [entries, setEntries] = useState([]);
   const [moods, setMoods] = useState([]);
   const [selectedCat, setSelectedCat] = useState(null);
@@ -571,8 +571,10 @@ function DailyLog() {
     });
     const onVisible = () => {
       if (document.visibilityState === "visible") {
+        const freshToday = getTodayForLog();
+        setToday(freshToday);
         skipSaveRef.current = true;
-        loadDailyData(today).then(data => {
+        loadDailyData(freshToday).then(data => {
           setEntries(data.entries);
           setMoods(data.moods);
           setTimeout(() => { skipSaveRef.current = false; }, 0);
