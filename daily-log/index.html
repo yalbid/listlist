@@ -526,7 +526,6 @@ function DailyLog() {
   const [view, setView] = useState("log");
   const [showToast, setShowToast] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const skipSaveRef = useRef(false);
   const inputRef = useRef(null);
 
   const currentMood = moods.length > 0 ? moods[moods.length - 1] : null;
@@ -573,11 +572,9 @@ function DailyLog() {
       if (document.visibilityState === "visible") {
         const freshToday = getTodayForLog();
         setToday(freshToday);
-        skipSaveRef.current = true;
         loadDailyData(freshToday).then(data => {
           setEntries(data.entries);
           setMoods(data.moods);
-          setTimeout(() => { skipSaveRef.current = false; }, 0);
         });
       }
     };
@@ -585,22 +582,23 @@ function DailyLog() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // entries가 바뀔 때마다 파이어베이스 저장
-  useEffect(() => {
-    if (loaded && !skipSaveRef.current) saveEntriesToFirebase(today, entries);
-  }, [entries, loaded]);
-
   const addEntry = () => {
     if (!selectedCat || !memo.trim()) return;
     const newEntry = { id: Date.now(), category: selectedCat, memo: memo.trim(), timestamp: Date.now() };
-    setEntries(prev => [...prev, newEntry]);
+    const newEntries = [...entries, newEntry];
+    setEntries(newEntries);
+    saveEntriesToFirebase(today, newEntries);
     setMemo("");
     setSelectedCat(null);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 1800);
   };
 
-  const removeEntry = (id) => { setEntries(prev => prev.filter(e => e.id !== id)); };
+  const removeEntry = (id) => {
+    const newEntries = entries.filter(e => e.id !== id);
+    setEntries(newEntries);
+    saveEntriesToFirebase(today, newEntries);
+  };
   const catInfo = (id) => CATEGORIES.find(c => c.id === id);
 
   const categorySummary = CATEGORIES.map(cat => ({
