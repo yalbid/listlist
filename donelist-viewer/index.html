@@ -40,7 +40,7 @@
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo } = React;
 
-/* ?? Firebase ?? */
+/* ── Firebase ── */
 const firebaseApp = firebase.initializeApp({
   apiKey: "AIzaSyC5zu4j-_ZChJQcEAEAZn9oBY1_amymnEM",
   authDomain: "happycalendar-1dd07.firebaseapp.com",
@@ -53,25 +53,25 @@ const fireDb = firebaseApp.firestore();
 const fireAuth = firebaseApp.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-/* ?? 湲곕텇 ?꾩씠肄??? */
+/* ── 기분 아이콘 ── */
 const MOOD_ICONS = [
-  { value: 1, emoji: "\u{1F622}", label: "留ㅼ슦 ?덉쥕?? },
-  { value: 2, emoji: "\u{1F614}", label: "?덉쥕?? },
-  { value: 3, emoji: "\u{1F610}", label: "蹂댄넻" },
-  { value: 4, emoji: "\u{1F60A}", label: "醫뗭쓬" },
-  { value: 5, emoji: "\u{1F604}", label: "留ㅼ슦 醫뗭쓬" },
+  { value: 1, emoji: "\u{1F622}", label: "매우 안좋음" },
+  { value: 2, emoji: "\u{1F614}", label: "안좋음" },
+  { value: 3, emoji: "\u{1F610}", label: "보통" },
+  { value: 4, emoji: "\u{1F60A}", label: "좋음" },
+  { value: 5, emoji: "\u{1F604}", label: "매우 좋음" },
 ];
 const moodMap = {};
 MOOD_ICONS.forEach(m => { moodMap[m.value] = m; });
 
-/* ?? 移댄뀒怨좊━ ?? */
+/* ── 카테고리 ── */
 const CATEGORIES = [
-  { id: "manga", label: "留뚰솕", emoji: "\u{1F4D6}", color: "#e8927c" },
-  { id: "illust", label: "?쇰윭?ㅽ듃", emoji: "\u{1F3A8}", color: "#d4a574" },
-  { id: "writing", label: "湲", emoji: "\u270D\uFE0F", color: "#7cb5a0" },
-  { id: "dev", label: "媛쒕컻", emoji: "\u{1F4BB}", color: "#7ca3c4" },
-  { id: "dojin", label: "?숈씤", emoji: "\u{1F4D5}", color: "#c97ca0" },
-  { id: "etc", label: "湲고?", emoji: "\u{1F4CC}", color: "#b39dcc" },
+  { id: "manga", label: "만화", emoji: "\u{1F4D6}", color: "#e8927c" },
+  { id: "illust", label: "일러스트", emoji: "\u{1F3A8}", color: "#d4a574" },
+  { id: "writing", label: "글", emoji: "\u270D\uFE0F", color: "#7cb5a0" },
+  { id: "dev", label: "개발", emoji: "\u{1F4BB}", color: "#7ca3c4" },
+  { id: "dojin", label: "동인", emoji: "\u{1F4D5}", color: "#c97ca0" },
+  { id: "etc", label: "기타", emoji: "\u{1F4CC}", color: "#b39dcc" },
 ];
 const catMap = {};
 const catOrder = {};
@@ -79,7 +79,7 @@ CATEGORIES.forEach((c, i) => { catMap[c.id] = c; catOrder[c.id] = i; });
 
 const ITEMS_PER_PAGE = 50;
 
-/* ?? ?좎쭨 ?좏떥 ?? */
+/* ── 날짜 유틸 ── */
 function pad2(n) { return String(n).padStart(2, "0"); }
 function dateStr(y, m, d) { return y + "-" + pad2(m) + "-" + pad2(d); }
 
@@ -90,7 +90,7 @@ function getLogDate() {
 }
 
 function weekNumFromFirst(year, month) {
-  // month??0遺???쒖옉. ?대떦 ??1?쇱씠 ?ы븿??二쇱쓽 ?붿슂?쇱쓣 諛섑솚
+  // month는 0부터 시작. 해당 월 1일이 포함된 주의 월요일을 반환
   const firstOfMonth = new Date(year, month, 1);
   const firstDow = firstOfMonth.getDay();
   const firstWeekMon = new Date(firstOfMonth);
@@ -111,18 +111,18 @@ function getWeekRange(y, m, d) {
 
   let label;
   if (monM === sunM && monY === sunY) {
-    // ?????덉뿉 ?덈뒗 二???洹???1?쇱씠 ?ы븿??二쇰????멸린
+    // 한 달 안에 있는 주 → 그 달 1일이 포함된 주부터 세기
     const base = weekNumFromFirst(monY, monM);
     const wn = Math.round((mon - base) / (7 * 86400000)) + 1;
-    label = monY + "??" + (monM + 1) + "??" + wn + "二쇱감";
+    label = monY + "년 " + (monM + 1) + "월 " + wn + "주차";
   } else {
-    // ???ъ뿉 嫄몄튇 二???蹂묎린
-    // ?댁쟾 ?? ?⑥닚???붿슂???좎쭨 湲곗?
+    // 두 달에 걸친 주 → 병기
+    // 이전 달: 단순히 월요일 날짜 기준
     const wnOld = Math.ceil(mon.getDate() / 7);
     if (monY === sunY) {
-      label = monY + "??" + (monM + 1) + "??" + wnOld + "二쇱감 / " + (sunM + 1) + "??1二쇱감";
+      label = monY + "년 " + (monM + 1) + "월 " + wnOld + "주차 / " + (sunM + 1) + "월 1주차";
     } else {
-      label = monY + "??" + (monM + 1) + "??" + wnOld + "二쇱감 / " + sunY + "??" + (sunM + 1) + "??1二쇱감";
+      label = monY + "년 " + (monM + 1) + "월 " + wnOld + "주차 / " + sunY + "년 " + (sunM + 1) + "월 1주차";
     }
   }
 
@@ -138,7 +138,7 @@ function getMonthRange(y, m) {
   return {
     start: dateStr(y, m, 1),
     end: dateStr(y, m, last),
-    label: y + "??" + m + "??
+    label: y + "년 " + m + "월"
   };
 }
 
@@ -146,7 +146,7 @@ function getYearRange(y) {
   return {
     start: dateStr(y, 1, 1),
     end: dateStr(y, 12, 31),
-    label: y + "??
+    label: y + "년"
   };
 }
 
@@ -170,9 +170,9 @@ function shiftYear(y, delta) {
 
 function formatDateLabel(dateKey) {
   const [y, m, d] = dateKey.split("-");
-  const dow = ["??, "??, "??, "??, "紐?, "湲?, "??];
+  const dow = ["일", "월", "화", "수", "목", "금", "토"];
   const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  return parseInt(m) + "??" + parseInt(d) + "??(" + dow[date.getDay()] + ")";
+  return parseInt(m) + "월 " + parseInt(d) + "일 (" + dow[date.getDay()] + ")";
 }
 
 function formatTime(ts) {
@@ -180,7 +180,7 @@ function formatTime(ts) {
   return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
 
-/* ?? Firebase ?곗씠??濡쒕뱶 ?? */
+/* ── Firebase 데이터 로드 ── */
 function parseDocData(data) {
   let items = [];
   if (data.items) { try { items = JSON.parse(data.items); } catch(e) {} }
@@ -224,9 +224,9 @@ async function loadAll() {
 async function loadTagConfig() {
   try {
     const doc = await fireDb.collection("dailyLogMeta").doc("tagConfig").get();
-    if (!doc.exists) return { tags: ["移쒓뎄", "媛議?, "留덇컧", "?숈씤?됱궗", "?낃툑??], events: ["?댁썝", "?듭쬆", "?쎈?寃?] };
+    if (!doc.exists) return { tags: ["친구", "가족", "마감", "동인행사", "입금일"], events: ["내원", "통증", "약변경"] };
     return doc.data();
-  } catch(e) { return { tags: ["移쒓뎄", "媛議?, "留덇컧", "?숈씤?됱궗", "?낃툑??], events: ["?댁썝", "?듭쬆", "?쎈?寃?] }; }
+  } catch(e) { return { tags: ["친구", "가족", "마감", "동인행사", "입금일"], events: ["내원", "통증", "약변경"] }; }
 }
 
 function saveTagConfig(config) {
@@ -239,7 +239,7 @@ function saveDayStatus(dateKey, fields) {
     .catch(e => console.warn("status save failed:", e));
 }
 
-/* ?? ?몄쬆 寃뚯씠???? */
+/* ── 인증 게이트 ── */
 function AuthGate({ children }) {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
@@ -253,56 +253,59 @@ function AuthGate({ children }) {
     fireAuth.signInWithPopup(googleProvider).catch(e => {
       setErr(
         e.code === "auth/popup-blocked"
-          ? "?앹뾽??李⑤떒?섏뿀?듬땲?? 釉뚮씪?곗? ?앹뾽 李⑤떒???댁젣?댁＜?몄슂."
+          ? "팝업이 차단되었습니다. 브라우저 팝업 차단을 해제해주세요."
           : e.message
       );
     });
   };
   if (checking) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#1a1a2e", color: "#999", fontFamily: "Noto Sans KR, sans-serif" }}>
-      <p>?뺤씤 以?..</p>
+      <p>확인 중...</p>
     </div>
   );
   if (!user) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, background: "#1a1a2e", fontFamily: "Noto Sans KR, sans-serif" }}>
-      <div style={{ fontSize: 48, marginBottom: 8 }}>?뱥</div>
-      <p style={{ fontSize: 15, color: "#999" }}>濡쒓렇?몄씠 ?꾩슂?⑸땲??/p>
-      <button onClick={doLogin} style={{ padding: "10px 28px", fontSize: 14, background: "#b8a9d4", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>Google 怨꾩젙?쇰줈 濡쒓렇??/button>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>📋</div>
+      <p style={{ fontSize: 15, color: "#999" }}>로그인이 필요합니다</p>
+      <button onClick={doLogin} style={{ padding: "10px 28px", fontSize: 14, background: "#b8a9d4", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>Google 계정으로 로그인</button>
       {err && <p style={{ fontSize: 12, color: "#e06060", maxWidth: 400, textAlign: "center", lineHeight: 1.5, padding: "0 20px" }}>{err}</p>}
     </div>
   );
   return children;
 }
 
-/* ?? 硫붿씤 ???? */
+/* ── 메인 앱 ── */
 function DonelistViewer() {
   const today = getLogDate();
   const todayKey = dateStr(today.y, today.m, today.d);
 
-  // 酉?紐⑤뱶: week, month, year, all
+  // 뷰 모드: week, month, year, all
   const [viewMode, setViewMode] = useState("week");
 
-  // 湲곌컙 ?곹깭
+  // 기간 상태
   const [weekRange, setWeekRange] = useState(() => getWeekRange(today.y, today.m, today.d));
   const [monthRange, setMonthRange] = useState(() => getMonthRange(today.y, today.m));
   const [yearRange, setYearRange] = useState(() => getYearRange(today.y));
 
-  // 移댄뀒怨좊━ ?꾪꽣
+  // 카테고리 필터
   const [catFilter, setCatFilter] = useState("all");
 
-  // ?곗씠??  const [rawData, setRawData] = useState({});
+  // 데이터
+  const [rawData, setRawData] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // ?섏씠吏?  const [page, setPage] = useState(1);
+  // 페이징
+  const [page, setPage] = useState(1);
 
-  // ?섏씠吏 蹂寃???留??꾨줈 ?ㅽ겕濡?  useEffect(() => {
+  // 페이지 변경 시 맨 위로 스크롤
+  useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [page]);
 
-  // ?묎린/?쇱튂湲?(?좎쭨蹂?
+  // 접기/펼치기 (날짜별)
   const [collapsed, setCollapsed] = useState({});
 
-  // ?곹깭 ?⑤꼸 (?좎쭨 ?대룞 媛??
+  // 상태 패널 (날짜 이동 가능)
   const [statusDate, setStatusDate] = useState(todayKey);
   const goStatusPrev = (e) => {
     e.stopPropagation();
@@ -329,10 +332,10 @@ function DonelistViewer() {
   const [newEvent, setNewEvent] = useState("");
   const [editMode, setEditMode] = useState(false);
 
-  // ?앸━ 二쇨린 硫뷀? ?곹깭 (?쒖꽦 ?щ? + ?쒖옉??
+  // 생리 주기 메타 상태 (활성 여부 + 시작일)
   const [periodMeta, setPeriodMeta] = useState({ active: false, startDate: null });
 
-  // ?쒓렇 ?ㅼ젙 + ?앸━ 硫뷀? 濡쒕뱶 (1??
+  // 태그 설정 + 생리 메타 로드 (1회)
   useEffect(() => {
     loadTagConfig().then(setTagConfig);
     fireDb.collection("dailyLogMeta").doc("periodState").get().then(doc => {
@@ -340,7 +343,7 @@ function DonelistViewer() {
     });
   }, []);
 
-  // ?좏깮 ?좎쭨 ?곹깭 濡쒕뱶
+  // 선택 날짜 상태 로드
   useEffect(() => {
     setTodayStatus({ moods: [], periodStart: false, periodEnd: false, statusLog: [] });
     fireDb.collection("dailyLogEntries").doc(statusDate).get().then(doc => {
@@ -452,15 +455,15 @@ function DonelistViewer() {
     saveTagConfig(next);
   };
 
-  // ?꾩옱 湲곌컙 ?뺣낫
+  // 현재 기간 정보
   const currentRange = useMemo(() => {
     if (viewMode === "week") return weekRange;
     if (viewMode === "month") return monthRange;
     if (viewMode === "year") return yearRange;
-    return { start: null, end: null, label: "?꾩껜" };
+    return { start: null, end: null, label: "전체" };
   }, [viewMode, weekRange, monthRange, yearRange]);
 
-  // ?곗씠??濡쒕뱶
+  // 데이터 로드
   useEffect(() => {
     setLoading(true);
     setPage(1);
@@ -478,11 +481,11 @@ function DonelistViewer() {
     doLoad();
   }, [viewMode, currentRange.start, currentRange.end]);
 
-  // ?앸━ 湲곌컙 怨꾩궛: ?쒖옉~醫낅즺 ?ъ씠 紐⑤뱺 ?좎쭨瑜?'start'|'end'|'ongoing'?쇰줈 留ㅽ븨
+  // 생리 기간 계산: 시작~종료 사이 모든 날짜를 'start'|'end'|'ongoing'으로 매핑
   const periodDays = useMemo(() => {
     const allDates = Object.keys(rawData).sort();
     const result = {}; // dateKey -> 'start' | 'end' | 'ongoing'
-    // ?꾩옱 酉?踰붿쐞 ?댁쟾???쒖옉???앸━媛 ?덈뒗吏 ?뺤씤
+    // 현재 뷰 범위 이전에 시작된 생리가 있는지 확인
     let inPeriod = false;
     if (periodMeta.active && periodMeta.startDate && allDates.length > 0 && periodMeta.startDate < allDates[0]) {
       inPeriod = true;
@@ -502,7 +505,7 @@ function DonelistViewer() {
     return result;
   }, [rawData, periodMeta]);
 
-  // ?꾪꽣留곷맂 ?꾩씠??(?좎쭨蹂?洹몃９)
+  // 필터링된 아이템 (날짜별 그룹)
   const { dateGroups, totalItems, filteredItems } = useMemo(() => {
     const dates = Object.keys(rawData).sort().reverse();
     const groups = [];
@@ -516,7 +519,8 @@ function DonelistViewer() {
         ? items
         : items.filter(item => item.category === catFilter);
       if (filtered.length > 0) {
-        // 移댄뀒怨좊━ ?쒖꽌 ??媛숈? 移댄뀒怨좊━ ?덉뿉???쒓컙??        const sorted = [...filtered].sort((a, b) => {
+        // 카테고리 순서 → 같은 카테고리 안에서 시간순
+        const sorted = [...filtered].sort((a, b) => {
           const catDiff = (catOrder[a.category] ?? 99) - (catOrder[b.category] ?? 99);
           if (catDiff !== 0) return catDiff;
           return a.timestamp - b.timestamp;
@@ -530,7 +534,7 @@ function DonelistViewer() {
     return { dateGroups: groups, totalItems: total, filteredItems: allItems };
   }, [rawData, catFilter]);
 
-  // ?섏씠吏?ㅼ씠???곸슜
+  // 페이지네이션 적용
   const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
   const pagedItems = useMemo(() => {
     const start = (page - 1) * ITEMS_PER_PAGE;
@@ -538,7 +542,8 @@ function DonelistViewer() {
     return filteredItems.slice(start, end);
   }, [filteredItems, page]);
 
-  // ?섏씠吏???대떦?섎뒗 ?좎쭨 洹몃９?쇰줈 ?ш뎄??  const pagedGroups = useMemo(() => {
+  // 페이지에 해당하는 날짜 그룹으로 재구성
+  const pagedGroups = useMemo(() => {
     const groups = [];
     let currentDate = null;
     let currentGroup = null;
@@ -553,7 +558,7 @@ function DonelistViewer() {
     return groups;
   }, [pagedItems]);
 
-  // 湲곌컙 ?대룞
+  // 기간 이동
   const goPrev = () => {
     setPage(1);
     setCollapsed({});
@@ -586,7 +591,8 @@ function DonelistViewer() {
     setCollapsed(prev => ({ ...prev, [dateKey]: !prev[dateKey] }));
   };
 
-  // ?꾩껜 ?묎린/?쇱튂湲?  const allCollapsed = pagedGroups.length > 0 && pagedGroups.every(g => collapsed[g.dateKey]);
+  // 전체 접기/펼치기
+  const allCollapsed = pagedGroups.length > 0 && pagedGroups.every(g => collapsed[g.dateKey]);
   const toggleAll = () => {
     if (allCollapsed) {
       setCollapsed({});
@@ -597,7 +603,7 @@ function DonelistViewer() {
     }
   };
 
-  // 移댄뀒怨좊━蹂?嫄댁닔 (?꾩옱 湲곌컙 ??
+  // 카테고리별 건수 (현재 기간 내)
   const catCounts = useMemo(() => {
     const counts = { all: 0 };
     CATEGORIES.forEach(c => { counts[c.id] = 0; });
@@ -612,28 +618,28 @@ function DonelistViewer() {
 
   return (
     <div style={S.container}>
-      {/* ?ㅻ뜑 */}
+      {/* 헤더 */}
       <div style={S.header}>
         <div style={S.headerTop}>
           <div>
-            <h1 style={{ ...S.title, cursor: "pointer" }} onClick={() => { if (confirm("濡쒓렇?꾩썐?좉퉴??")) fireAuth.signOut(); }} title="濡쒓렇?꾩썐">Donelist Viewer</h1>
-            <p style={S.subtitle}>????紐⑥븘蹂닿린</p>
+            <h1 style={{ ...S.title, cursor: "pointer" }} onClick={() => { if (confirm("로그아웃할까요?")) fireAuth.signOut(); }} title="로그아웃">Donelist Viewer</h1>
+            <p style={S.subtitle}>한 일 모아보기</p>
           </div>
           {totalItems > 0 && (
             <div style={S.badge}>
               <span style={S.badgeNum}>{totalItems}</span>
-              <span style={S.badgeLabel}>嫄?/span>
+              <span style={S.badgeLabel}>건</span>
             </div>
           )}
         </div>
 
-        {/* 酉?紐⑤뱶 ??*/}
+        {/* 뷰 모드 탭 */}
         <div style={S.tabs}>
           {[
-            { id: "week", label: "二쇨컙" },
-            { id: "month", label: "?붽컙" },
-            { id: "year", label: "?곌컙" },
-            { id: "all", label: "?꾩껜" },
+            { id: "week", label: "주간" },
+            { id: "month", label: "월간" },
+            { id: "year", label: "연간" },
+            { id: "all", label: "전체" },
           ].map(v => (
             <button key={v.id} className="tab-btn" style={{ ...S.tab, ...(viewMode === v.id ? S.tabActive : {}) }}
               onClick={() => { setViewMode(v.id); setPage(1); setCatFilter("all"); setCollapsed({}); }}>
@@ -643,24 +649,24 @@ function DonelistViewer() {
         </div>
       </div>
 
-      {/* 肄섑뀗痢?*/}
+      {/* 콘텐츠 */}
       <div style={S.content}>
 
-        {/* ?곹깭 ?⑤꼸 (?좎쭨 ?대룞 媛?? */}
+        {/* 상태 패널 (날짜 이동 가능) */}
         <div style={S.statusPanel}>
           <div style={S.statusToggle}>
             <div onClick={() => setStatusOpen(!statusOpen)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#e0e0e0" }}>
-                {statusOpen ? "?? : "??}
+                {statusOpen ? "▼" : "▶"}
               </span>
-              <button onClick={goStatusPrev} style={S.statusNavBtn}>?</button>
+              <button onClick={goStatusPrev} style={S.statusNavBtn}>◀</button>
               <span style={{ fontSize: 13, fontWeight: 600, color: statusDate === todayKey ? "#e0e0e0" : "#b8a9d4" }}>
                 {formatDateLabel(statusDate)}
               </span>
               <button onClick={goStatusNext}
-                style={{ ...S.statusNavBtn, opacity: statusDate < todayKey ? 1 : 0.3 }}>??/button>
+                style={{ ...S.statusNavBtn, opacity: statusDate < todayKey ? 1 : 0.3 }}>▶</button>
               {statusDate !== todayKey && (
-                <button onClick={goStatusToday} style={S.statusTodayBtn}>?ㅻ뒛</button>
+                <button onClick={goStatusToday} style={S.statusTodayBtn}>오늘</button>
               )}
             </div>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -672,7 +678,7 @@ function DonelistViewer() {
 
           {statusOpen && (
             <div style={S.statusBody}>
-              {/* ?앸━二쇨린 ?좉? */}
+              {/* 생리주기 토글 */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
                 {!periodMeta.active ? (
                   <button onClick={togglePeriodStart} style={{
@@ -680,7 +686,7 @@ function DonelistViewer() {
                     background: todayStatus.periodStart ? "rgba(232,100,100,0.2)" : "rgba(255,255,255,0.06)",
                     borderColor: todayStatus.periodStart ? "#e86464" : "rgba(255,255,255,0.1)",
                     color: todayStatus.periodStart ? "#e86464" : "#888",
-                  }}>{"\u{1FA78}"} ?앸━ ?쒖옉??/button>
+                  }}>{"\u{1FA78}"} 생리 시작일</button>
                 ) : (
                   <>
                     {todayStatus.periodStart ? (
@@ -689,31 +695,31 @@ function DonelistViewer() {
                         background: "rgba(232,100,100,0.2)",
                         borderColor: "#e86464",
                         color: "#e86464",
-                      }}>{"\u{1FA78}"} ?앸━ ?쒖옉??/button>
+                      }}>{"\u{1FA78}"} 생리 시작일</button>
                     ) : (
-                      <span style={{ fontSize: 13, color: "#e86464", fontWeight: 500 }}>{"\u{1FA78}"} ?앸━ 以?periodMeta.startDate ? " (" + periodMeta.startDate.slice(5).replace("-", "/") + "~)" : ""}</span>
+                      <span style={{ fontSize: 13, color: "#e86464", fontWeight: 500 }}>{"\u{1FA78}"} 생리 중{periodMeta.startDate ? " (" + periodMeta.startDate.slice(5).replace("-", "/") + "~)" : ""}</span>
                     )}
                     <button onClick={togglePeriodEnd} style={{
                       ...S.periodBtn,
                       background: todayStatus.periodEnd ? "rgba(100,150,232,0.2)" : "rgba(255,255,255,0.06)",
                       borderColor: todayStatus.periodEnd ? "#6496e8" : "rgba(255,255,255,0.1)",
                       color: todayStatus.periodEnd ? "#6496e8" : "#888",
-                    }}>{"\u{2705}"} ?앸━ 醫낅즺??/button>
+                    }}>{"\u{2705}"} 생리 종료일</button>
                   </>
                 )}
               </div>
 
-              {/* ?쒓렇 */}
+              {/* 태그 */}
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: "#999" }}>?쒓렇</span>
-                  <button onClick={() => setEditMode(!editMode)} style={{ background: "none", border: "none", color: "#888", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{editMode ? "?꾨즺" : "?몄쭛"}</button>
+                  <span style={{ fontSize: 12, color: "#999" }}>태그</span>
+                  <button onClick={() => setEditMode(!editMode)} style={{ background: "none", border: "none", color: "#888", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{editMode ? "완료" : "편집"}</button>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {tagConfig.tags.map(tag => (
                     <div key={tag} style={{ display: "flex", alignItems: "center", gap: 2 }}>
                       <button onClick={() => startStatusEntry("tag", tag)} style={S.tagBtn}>{tag}</button>
-                      {editMode && <button onClick={() => removeTagFromPool(tag)} style={S.removePoolBtn}>횞</button>}
+                      {editMode && <button onClick={() => removeTagFromPool(tag)} style={S.removePoolBtn}>×</button>}
                     </div>
                   ))}
                   <div style={{ display: "flex", gap: 4 }}>
@@ -723,14 +729,14 @@ function DonelistViewer() {
                 </div>
               </div>
 
-              {/* ?대깽??*/}
+              {/* 이벤트 */}
               <div style={{ marginBottom: 12 }}>
-                <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 6 }}>?대깽??/span>
+                <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 6 }}>이벤트</span>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {tagConfig.events.map(evt => (
                     <div key={evt} style={{ display: "flex", alignItems: "center", gap: 2 }}>
                       <button onClick={() => startStatusEntry("event", evt)} style={S.eventBtn}>{evt}</button>
-                      {editMode && <button onClick={() => removeEventFromPool(evt)} style={S.removePoolBtn}>횞</button>}
+                      {editMode && <button onClick={() => removeEventFromPool(evt)} style={S.removePoolBtn}>×</button>}
                     </div>
                   ))}
                   <div style={{ display: "flex", gap: 4 }}>
@@ -740,35 +746,35 @@ function DonelistViewer() {
                 </div>
               </div>
 
-              {/* 硫붾え ?낅젰? */}
+              {/* 메모 입력란 */}
               {pendingStatus && (
                 <div style={{ marginBottom: 12, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 12 }}>
                   <p style={{ fontSize: 12, color: pendingStatus.type === "tag" ? "#b8a9d4" : "#e8927c", marginBottom: 6 }}>
-                    {pendingStatus.type === "tag" ? "?쒓렇" : "?대깽??}: {pendingStatus.value}
+                    {pendingStatus.type === "tag" ? "태그" : "이벤트"}: {pendingStatus.value}
                   </p>
                   <div style={{ display: "flex", gap: 6 }}>
                     <input ref={statusNoteRef} type="text" value={statusNote} onChange={e => setStatusNote(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && confirmStatusEntry()} placeholder="硫붾え (?좏깮)"
+                      onKeyDown={e => e.key === "Enter" && confirmStatusEntry()} placeholder="메모 (선택)"
                       style={S.statusNoteInput} />
-                    <button onClick={confirmStatusEntry} style={S.statusConfirmBtn}>?뺤씤</button>
-                    <button onClick={cancelStatusEntry} style={S.statusCancelBtn}>痍⑥냼</button>
+                    <button onClick={confirmStatusEntry} style={S.statusConfirmBtn}>확인</button>
+                    <button onClick={cancelStatusEntry} style={S.statusCancelBtn}>취소</button>
                   </div>
                 </div>
               )}
 
-              {/* ?ㅻ뒛??湲곕줉 */}
+              {/* 오늘의 기록 */}
               {todayStatus.statusLog.length > 0 && (
                 <div>
-                  <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 6 }}>{statusDate === todayKey ? "?ㅻ뒛??湲곕줉" : formatDateLabel(statusDate) + " 湲곕줉"}</span>
+                  <span style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 6 }}>{statusDate === todayKey ? "오늘의 기록" : formatDateLabel(statusDate) + " 기록"}</span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {todayStatus.statusLog.map((entry, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "4px 8px", background: "rgba(255,255,255,0.03)", borderRadius: 6 }}>
-                        <span style={{ color: entry.type === "tag" ? "#b8a9d4" : "#e8927c", flexShrink: 0 }}>{entry.type === "tag" ? "?쒓렇" : "?대깽??}</span>
+                        <span style={{ color: entry.type === "tag" ? "#b8a9d4" : "#e8927c", flexShrink: 0 }}>{entry.type === "tag" ? "태그" : "이벤트"}</span>
                         <span style={{ color: "#ccc", flexShrink: 0 }}>{entry.value}</span>
-                        {entry.note && <span style={{ color: "#aaa", flex: 1 }}>??{entry.note}</span>}
+                        {entry.note && <span style={{ color: "#aaa", flex: 1 }}>— {entry.note}</span>}
                         {!entry.note && <span style={{ flex: 1 }} />}
                         <span style={{ color: "#666", flexShrink: 0 }}>{formatTime(entry.time)}</span>
-                        <button onClick={() => removeStatusEntry(i)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, padding: "0 2px" }}>횞</button>
+                        <button onClick={() => removeStatusEntry(i)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 14, padding: "0 2px" }}>×</button>
                       </div>
                     ))}
                   </div>
@@ -778,21 +784,21 @@ function DonelistViewer() {
           )}
         </div>
 
-        {/* 湲곌컙 ?ㅻ퉬寃뚯씠??*/}
+        {/* 기간 네비게이션 */}
         {viewMode !== "all" && (
           <div style={S.periodNav}>
-            <button onClick={goPrev} style={S.navBtn}>?</button>
+            <button onClick={goPrev} style={S.navBtn}>◀</button>
             <span style={S.periodLabel}>{currentRange.label}</span>
-            <button onClick={goNext} style={S.navBtn}>??/button>
+            <button onClick={goNext} style={S.navBtn}>▶</button>
           </div>
         )}
 
-        {/* 移댄뀒怨좊━ ?꾪꽣 */}
+        {/* 카테고리 필터 */}
         <div style={S.catRow}>
           <button className="cat-btn"
             style={{ ...S.catBtn, background: catFilter === "all" ? "rgba(184,169,212,0.3)" : "rgba(255,255,255,0.06)", color: catFilter === "all" ? "#e0e0e0" : "#a0a0a0", borderColor: catFilter === "all" ? "#b8a9d455" : "rgba(255,255,255,0.1)" }}
             onClick={() => { setCatFilter("all"); setPage(1); }}>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>?꾩껜</span>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>전체</span>
             <span style={{ fontSize: 11, color: catFilter === "all" ? "#ccc" : "#666" }}>{catCounts.all}</span>
           </button>
           {CATEGORIES.map(cat => (
@@ -806,29 +812,29 @@ function DonelistViewer() {
           ))}
         </div>
 
-        {/* 濡쒕뵫 */}
+        {/* 로딩 */}
         {loading ? (
           <div style={S.empty}>
-            <p style={{ color: "#888", fontSize: 14 }}>遺덈윭?ㅻ뒗 以?..</p>
+            <p style={{ color: "#888", fontSize: 14 }}>불러오는 중...</p>
           </div>
         ) : totalItems === 0 ? (
           <div style={S.empty}>
-            <span style={{ fontSize: 32, marginBottom: 12 }}>?벊</span>
-            <p style={{ color: "#777", fontSize: 14, lineHeight: 1.6 }}>??湲곌컙?먮뒗 湲곕줉???놁뼱??/p>
+            <span style={{ fontSize: 32, marginBottom: 12 }}>📭</span>
+            <p style={{ color: "#777", fontSize: 14, lineHeight: 1.6 }}>이 기간에는 기록이 없어요</p>
           </div>
         ) : (
           <>
-            {/* ?꾩껜 ?묎린/?쇱튂湲?+ ?섏씠吏 ?뺣낫 */}
+            {/* 전체 접기/펼치기 + 페이지 정보 */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <button onClick={toggleAll} style={S.toggleAllBtn}>
-                {allCollapsed ? "??紐⑤몢 ?쇱튂湲? : "??紐⑤몢 ?묎린"}
+                {allCollapsed ? "▶ 모두 펼치기" : "▼ 모두 접기"}
               </button>
               {totalPages > 1 && (
-                <span style={{ fontSize: 12, color: "#666" }}>{page} / {totalPages} ?섏씠吏</span>
+                <span style={{ fontSize: 12, color: "#666" }}>{page} / {totalPages} 페이지</span>
               )}
             </div>
 
-            {/* ?좎쭨蹂?洹몃９ */}
+            {/* 날짜별 그룹 */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {pagedGroups.map(group => {
                 const isCollapsed = collapsed[group.dateKey];
@@ -841,44 +847,44 @@ function DonelistViewer() {
                 const uniqueEvents = [...new Set(dayStatusLog.filter(s => s.type === "event").map(s => s.value))];
                 return (
                   <div key={group.dateKey} className="fade-in" style={S.dateGroup}>
-                    {/* ?좎쭨 ?ㅻ뜑 */}
+                    {/* 날짜 헤더 */}
                     <div className="date-group-header" onClick={() => toggleDate(group.dateKey)}
                       style={S.dateHeader}>
-                      <span style={S.collapseIcon}>{isCollapsed ? "?? : "??}</span>
+                      <span style={S.collapseIcon}>{isCollapsed ? "▶" : "▼"}</span>
                       <span style={S.dateLabel}>{formatDateLabel(group.dateKey)}</span>
-                      {lastMood && <span style={{ fontSize: 16 }} title={(moodMap[lastMood.mood]?.label || "") + (lastMood.note ? " ??" + lastMood.note : "")}>{moodMap[lastMood.mood]?.emoji}</span>}
-                      {dayPeriod === 'start' && <span style={{ fontSize: 13 }} title="?앸━ ?쒖옉??>{"\u{1FA78}"}</span>}
-                      {dayPeriod === 'ongoing' && <span style={{ fontSize: 13, opacity: 0.6 }} title="?앸━ 以?>{"\u{1FA78}"}</span>}
-                      {dayPeriod === 'end' && <span style={{ fontSize: 13 }} title="?앸━ 醫낅즺??>{"\u{2705}"}</span>}
+                      {lastMood && <span style={{ fontSize: 16 }} title={(moodMap[lastMood.mood]?.label || "") + (lastMood.note ? " — " + lastMood.note : "")}>{moodMap[lastMood.mood]?.emoji}</span>}
+                      {dayPeriod === 'start' && <span style={{ fontSize: 13 }} title="생리 시작일">{"\u{1FA78}"}</span>}
+                      {dayPeriod === 'ongoing' && <span style={{ fontSize: 13, opacity: 0.6 }} title="생리 중">{"\u{1FA78}"}</span>}
+                      {dayPeriod === 'end' && <span style={{ fontSize: 13 }} title="생리 종료일">{"\u{2705}"}</span>}
                       {uniqueTags.map(t => <span key={t} style={S.headerTag}>{t}</span>)}
                       {uniqueEvents.map(e => <span key={e} style={S.headerEvent}>{e}</span>)}
                       <span style={{ flex: 1 }} />
-                      <span style={S.dateCount}>{group.items.length}嫄?/span>
+                      <span style={S.dateCount}>{group.items.length}건</span>
                     </div>
 
-                    {/* ??ぉ 由ъ뒪??- 移댄뀒怨좊━蹂?洹몃９ */}
+                    {/* 항목 리스트 - 카테고리별 그룹 */}
                     {!isCollapsed && (
                       <div style={S.itemList}>
-                        {/* 湲곕텇 釉붾윮 */}
+                        {/* 기분 블럭 */}
                         {dayMoods.length > 0 && (
                           <div style={{ borderLeft: "3px solid #b8a9d4", margin: "6px 12px", borderRadius: 4 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px" }}>
                               <span style={{ fontSize: 16 }}>{moodMap[dayMoods[dayMoods.length - 1].mood]?.emoji}</span>
-                              <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>湲곕텇</span>
-                              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "rgba(184,169,212,0.12)", color: "#b8a9d4", marginLeft: "auto" }}>{dayMoods.length}??/span>
+                              <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>기분</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "rgba(184,169,212,0.12)", color: "#b8a9d4", marginLeft: "auto" }}>{dayMoods.length}회</span>
                             </div>
                             {dayMoods.map((m, mi) => (
                               <div key={mi} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 14px 6px 28px", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
                                 <span style={{ fontSize: 16, flexShrink: 0 }}>{moodMap[m.mood]?.emoji}</span>
                                 <span style={{ fontSize: 13, color: "#b8a9d4", flexShrink: 0 }}>{moodMap[m.mood]?.label}</span>
-                                {m.note && <span style={{ flex: 1, fontSize: 13, color: "#aaa" }}>??{m.note}</span>}
+                                {m.note && <span style={{ flex: 1, fontSize: 13, color: "#aaa" }}>— {m.note}</span>}
                                 {!m.note && <span style={{ flex: 1 }} />}
                                 <span style={{ fontSize: 11, color: "#666", flexShrink: 0 }}>{formatTime(m.time)}</span>
                               </div>
                             ))}
                           </div>
                         )}
-                        {/* 移댄뀒怨좊━蹂?釉붾윮 */}
+                        {/* 카테고리별 블럭 */}
                         {(() => {
                           const catGroups = [];
                           let currentCat = null;
@@ -896,7 +902,7 @@ function DonelistViewer() {
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px" }}>
                                   <span style={{ fontSize: 16 }}>{c.emoji}</span>
                                   <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{c.label}</span>
-                                  <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: c.color + "22", color: c.color, marginLeft: "auto" }}>{cg.items.length}嫄?/span>
+                                  <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: c.color + "22", color: c.color, marginLeft: "auto" }}>{cg.items.length}건</span>
                                 </div>
                                 {cg.items.map(item => (
                                   <div key={item.id || item.timestamp} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 14px 6px 28px", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
@@ -915,11 +921,11 @@ function DonelistViewer() {
               })}
             </div>
 
-            {/* ?섏씠吏?ㅼ씠??*/}
+            {/* 페이지네이션 */}
             {totalPages > 1 && (
               <div style={S.pagination}>
                 <button className="page-btn" style={{ ...S.pageBtn, opacity: page > 1 ? 1 : 0.3 }}
-                  disabled={page <= 1} onClick={() => setPage(p => p - 1)}>? ?댁쟾</button>
+                  disabled={page <= 1} onClick={() => setPage(p => p - 1)}>◀ 이전</button>
 
                 <div style={S.pageNumbers}>
                   {(() => {
@@ -956,7 +962,7 @@ function DonelistViewer() {
                 </div>
 
                 <button className="page-btn" style={{ ...S.pageBtn, opacity: page < totalPages ? 1 : 0.3 }}
-                  disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>?ㅼ쓬 ??/button>
+                  disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>다음 ▶</button>
               </div>
             )}
           </>
@@ -966,7 +972,7 @@ function DonelistViewer() {
   );
 }
 
-/* ?? ?ㅽ????? */
+/* ── 스타일 ── */
 const S = {
   container: {
     fontFamily: "'Noto Sans KR', sans-serif",
