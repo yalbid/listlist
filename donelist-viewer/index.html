@@ -304,6 +304,24 @@ function DonelistViewer() {
 
   // ?곹깭 ?⑤꼸 (?좎쭨 ?대룞 媛??
   const [statusDate, setStatusDate] = useState(todayKey);
+  const goStatusPrev = (e) => {
+    e.stopPropagation();
+    setStatusDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 1);
+      return dateStr(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    });
+  };
+  const goStatusNext = (e) => {
+    e.stopPropagation();
+    if (statusDate >= todayKey) return;
+    setStatusDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 1);
+      return dateStr(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    });
+  };
+  const goStatusToday = (e) => { e.stopPropagation(); setStatusDate(todayKey); };
   const [statusOpen, setStatusOpen] = useState(false);
   const [todayStatus, setTodayStatus] = useState({ moods: [], periodStart: false, periodEnd: false, statusLog: [] });
   const [tagConfig, setTagConfig] = useState({ tags: [], events: [] });
@@ -635,16 +653,14 @@ function DonelistViewer() {
               <span style={{ fontSize: 13, fontWeight: 600, color: "#e0e0e0" }}>
                 {statusOpen ? "?? : "??}
               </span>
-              <button onClick={e => { e.stopPropagation(); setStatusDate(prev => { const d = new Date(prev); d.setDate(d.getDate() - 1); return dateStr(d.getFullYear(), d.getMonth() + 1, d.getDate()); }); }}
-                style={S.statusNavBtn}>?</button>
+              <button onClick={goStatusPrev} style={S.statusNavBtn}>?</button>
               <span style={{ fontSize: 13, fontWeight: 600, color: statusDate === todayKey ? "#e0e0e0" : "#b8a9d4" }}>
                 {formatDateLabel(statusDate)}
               </span>
-              <button onClick={e => { e.stopPropagation(); if (statusDate < todayKey) setStatusDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + 1); return dateStr(d.getFullYear(), d.getMonth() + 1, d.getDate()); }); }}
+              <button onClick={goStatusNext}
                 style={{ ...S.statusNavBtn, opacity: statusDate < todayKey ? 1 : 0.3 }}>??/button>
               {statusDate !== todayKey && (
-                <button onClick={e => { e.stopPropagation(); setStatusDate(todayKey); }}
-                  style={S.statusTodayBtn}>?ㅻ뒛</button>
+                <button onClick={goStatusToday} style={S.statusTodayBtn}>?ㅻ뒛</button>
               )}
             </div>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
