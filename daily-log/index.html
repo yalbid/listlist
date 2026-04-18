@@ -202,7 +202,7 @@ function WorkStatsTab() {
   const getTodayVal = (key) => {
     const base = todayData || {};
     if (key === "comm") return base.comm || 0;
-    if (key === "doodle") return 0;
+    if (key === "doodle") return base.doodle || 0;
     if (key === "doj") return base.doj || 0;
     if (key === "novel") return base.novel || 0;
     if (key === "dev") return (rmToday.dev || 0);
