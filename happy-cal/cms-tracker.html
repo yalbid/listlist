@@ -270,6 +270,10 @@ function CommissionTracker() {
   const [manualTimeInput, setManualTimeInput] = useState({ show: false, hours: 0, minutes: 0 });
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [archiveFilter, setArchiveFilter] = useState({ month: "all", type: "all", platform: "all" });
+  const [archiveSubTab, setArchiveSubTab] = useState("list");
+  const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
+  const [matrixRange, setMatrixRange] = useState("all");
+  const [heatmapCell, setHeatmapCell] = useState(null);
   const [showHourlyRate, setShowHourlyRate] = useState(false);
   const [listFilter, setListFilter] = useState("all");
   const [listPage, setListPage] = useState(1);
@@ -296,6 +300,32 @@ function CommissionTracker() {
     const t = customTypes.find(ct => ct.name === typeName);
     return t ? t.category === "doodle" : typeName.indexOf("낙서:") === 0;
   };
+  const TIME_SLOTS = ["오전", "오후", "저녁", "심야"];
+  const HEATMAP_COLORS = ["#F5EDF5", "#E1CCE5", "#C8A2D8", "#9B6FB5", "#6E3F8C"];
+  const HEATMAP_ACCENT = "#9B6FB5";
+  function getTimeSlot(isoStr, isOvernightBatch) {
+    if (isOvernightBatch) return "심야";
+    const h = new Date(isoStr).getHours();
+    if (h >= 5 && h < 12) return "오전";
+    if (h >= 12 && h < 18) return "오후";
+    if (h >= 18 && h < 22) return "저녁";
+    return "심야";
+  }
+  function toLocalDatetimeInput(date) {
+    const pad = n => String(n).padStart(2, "0");
+    return date.getFullYear() + "-" + pad(date.getMonth()+1) + "-" + pad(date.getDate()) + "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+  }
+  function formatDateKey(date) {
+    const pad = n => String(n).padStart(2, "0");
+    return date.getFullYear() + "-" + pad(date.getMonth()+1) + "-" + pad(date.getDate());
+  }
+  function heatLevel(n) {
+    if (n === 0) return 0;
+    if (n === 1) return 1;
+    if (n <= 3) return 2;
+    if (n <= 6) return 3;
+    return 4;
+  }
   const getTypePrice = (typeName) => {
     const t = customTypes.find(ct => ct.name === typeName);
     return t ? t.price : 0;
@@ -307,7 +337,8 @@ function CommissionTracker() {
   const [form, setForm] = useState({
     name: "", type: "", price: 0,
     hasExtras: false, extrasAmount: 0, imageData: null, notes: "",
-    requestUrl: "", deadline: "", paidDate: "", platform: ""
+    requestUrl: "", deadline: "", paidDate: "", platform: "",
+    receivedAt: "", isOvernightBatch: false
   });
 
   const [timerState, setTimerState] = useState("idle");
@@ -539,7 +570,7 @@ function CommissionTracker() {
   }
 
   function resetForm() {
-    setForm({ name: "", type: customTypes.length > 0 ? customTypes[0].name : "", price: customTypes.length > 0 ? customTypes[0].price : 0, hasExtras: false, extrasAmount: 0, imageData: null, notes: "", requestUrl: "", deadline: "", paidDate: "", platform: platforms.length > 0 ? platforms[0].name : "" });
+    setForm({ name: "", type: customTypes.length > 0 ? customTypes[0].name : "", price: customTypes.length > 0 ? customTypes[0].price : 0, hasExtras: false, extrasAmount: 0, imageData: null, notes: "", requestUrl: "", deadline: "", paidDate: "", platform: platforms.length > 0 ? platforms[0].name : "", receivedAt: toLocalDatetimeInput(new Date()), isOvernightBatch: false });
     setEditingId(null);
   }
 
@@ -551,7 +582,8 @@ function CommissionTracker() {
         hasExtras: form.hasExtras, extrasAmount: form.hasExtras ? Number(form.extrasAmount) : 0,
         imageData: form.imageData || c.imageData, notes: form.notes,
         requestUrl: form.requestUrl, deadline: form.deadline, paidDate: form.paidDate,
-        platform: form.platform
+        platform: form.platform,
+        receivedAt: form.receivedAt || "", isOvernightBatch: !!form.isOvernightBatch
       } : c));
     } else {
       const newComm = {
@@ -561,6 +593,7 @@ function CommissionTracker() {
         imageData: form.imageData, notes: form.notes,
         requestUrl: form.requestUrl, deadline: form.deadline, paidDate: form.paidDate,
         platform: form.platform,
+        receivedAt: form.receivedAt || "", isOvernightBatch: !!form.isOvernightBatch,
         sessions: [], comments: [], status: "in-progress", createdAt: Date.now()
       };
       setCommissions(prev => [newComm, ...prev]);
@@ -890,6 +923,20 @@ function CommissionTracker() {
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               rows={2} placeholder="작업 관련 메모..."
               style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end", marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 13, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>접수 시각</label>
+              <input type="datetime-local" value={form.receivedAt}
+                onChange={e => setForm(f => ({ ...f, receivedAt: e.target.value }))}
+                style={{ width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <label style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6, paddingBottom: 8, cursor: "pointer", userSelect: "none" }}
+              title="새벽(22~05시)에 도착한 신청을 아침에 일괄 입력할 때 체크">
+              <input type="checkbox" checked={form.isOvernightBatch}
+                onChange={e => setForm(f => ({ ...f, isOvernightBatch: e.target.checked }))} />
+              🌙 새벽 도착분
+            </label>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
@@ -1273,6 +1320,21 @@ function CommissionTracker() {
 
         return (
           <div>
+            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
+              {[["list","완료 목록"],["year","연간 히트맵"],["matrix","요일×시간대"]].map(([v,l]) => (
+                <button key={v} onClick={() => { setArchiveSubTab(v); setHeatmapCell(null); }}
+                  style={{
+                    padding: "8px 14px", fontSize: 13,
+                    border: "none", background: "transparent", cursor: "pointer",
+                    borderBottom: archiveSubTab === v ? "2px solid " + HEATMAP_ACCENT : "2px solid transparent",
+                    color: archiveSubTab === v ? HEATMAP_ACCENT : "var(--color-text-secondary)",
+                    fontWeight: archiveSubTab === v ? 500 : 400,
+                    fontFamily: "inherit"
+                  }}>{l}</button>
+              ))}
+            </div>
+
+            {archiveSubTab === "list" && <>
             <div style={{ display: "flex", gap: 10, marginBottom: "1rem", flexWrap: "wrap" }}>
               <div>
                 <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 3 }}>기간 (납입일 기준)</label>
@@ -1456,6 +1518,260 @@ function CommissionTracker() {
                 </div>
               )}
             </div>
+            </>}
+
+            {archiveSubTab === "year" && (() => {
+              const yearsSet = new Set();
+              commissions.forEach(c => { if (c.receivedAt) yearsSet.add(new Date(c.receivedAt).getFullYear()); });
+              yearsSet.add(new Date().getFullYear());
+              const years = [...yearsSet].sort((a,b) => b-a);
+
+              const targets = commissions.filter(c => c.receivedAt && !isStatsExcluded(c.type));
+              const countByDate = {};
+              targets.forEach(c => {
+                const dt = new Date(c.receivedAt);
+                if (dt.getFullYear() !== heatmapYear) return;
+                const key = formatDateKey(dt);
+                countByDate[key] = (countByDate[key] || 0) + 1;
+              });
+
+              const start = new Date(heatmapYear, 0, 1);
+              const end = new Date(heatmapYear, 11, 31);
+              const startDow = start.getDay();
+              const cells = [];
+              for (let i = 0; i < startDow; i++) cells.push({ empty: true });
+              const cursor = new Date(start);
+              while (cursor <= end) {
+                const key = formatDateKey(cursor);
+                cells.push({ date: new Date(cursor), count: countByDate[key] || 0, key });
+                cursor.setDate(cursor.getDate() + 1);
+              }
+
+              const monthLabels = [];
+              for (let m = 0; m < 12; m++) {
+                const firstDay = new Date(heatmapYear, m, 1);
+                const dayOfYear = Math.floor((firstDay - start) / 86400000);
+                const cellIndex = startDow + dayOfYear;
+                monthLabels.push({ month: m + 1, week: Math.floor(cellIndex / 7) });
+              }
+
+              const selectedList = heatmapCell && heatmapCell.type === "year"
+                ? targets.filter(c => formatDateKey(new Date(c.receivedAt)) === heatmapCell.key)
+                    .sort((a,b) => new Date(a.receivedAt) - new Date(b.receivedAt))
+                : [];
+              const totalYearCount = Object.values(countByDate).reduce((s,n)=>s+n,0);
+
+              return (
+                <div>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <label style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>연도</label>
+                    <select value={heatmapYear}
+                      onChange={e => { setHeatmapYear(Number(e.target.value)); setHeatmapCell(null); }}
+                      style={{ height: 32, fontSize: 13, minWidth: 90 }}>
+                      {years.map(y => <option key={y} value={y}>{y}년</option>)}
+                    </select>
+                    <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                      낙서 제외 · 접수 시각 기준 · 총 {totalYearCount}건
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: "var(--color-background-primary)",
+                    border: "0.5px solid var(--color-border-tertiary)",
+                    borderRadius: "var(--border-radius-lg)",
+                    padding: "1rem",
+                    overflowX: "auto"
+                  }}>
+                    <div style={{ display: "inline-block", minWidth: 780 }}>
+                      <div style={{ position: "relative", height: 16, marginLeft: 24, marginBottom: 2 }}>
+                        {monthLabels.map(ml => (
+                          <span key={ml.month} style={{
+                            position: "absolute",
+                            left: ml.week * 14,
+                            fontSize: 10,
+                            color: "var(--color-text-tertiary)"
+                          }}>{ml.month}월</span>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--color-text-tertiary)" }}>
+                          {["","월","","수","","금",""].map((d,i) => (
+                            <div key={i} style={{ height: 12, lineHeight: "12px" }}>{d}</div>
+                          ))}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateRows: "repeat(7, 12px)", gridAutoFlow: "column", gridAutoColumns: "12px", gap: 2 }}>
+                          {cells.map((cell, i) => {
+                            if (cell.empty) return <div key={i} />;
+                            const level = heatLevel(cell.count);
+                            const isSel = heatmapCell && heatmapCell.type === "year" && heatmapCell.key === cell.key;
+                            return <div key={i}
+                              onClick={() => setHeatmapCell({ type: "year", key: cell.key, label: cell.key, count: cell.count })}
+                              title={cell.key + " · " + cell.count + "건"}
+                              style={{
+                                width: 12, height: 12, borderRadius: 2,
+                                background: HEATMAP_COLORS[level],
+                                cursor: "pointer",
+                                boxShadow: isSel ? "0 0 0 2px " + HEATMAP_ACCENT : "none"
+                              }} />;
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 10, fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                        <span>적음</span>
+                        {HEATMAP_COLORS.map((c,i) => <div key={i} style={{ width: 12, height: 12, background: c, borderRadius: 2 }} />)}
+                        <span>많음</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {heatmapCell && heatmapCell.type === "year" && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+                        {heatmapCell.label} ({selectedList.length}건)
+                      </div>
+                      {selectedList.length === 0 ? (
+                        <div style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>해당 일자의 신청이 없습니다.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {selectedList.map(c => (
+                            <div key={c.id}
+                              onClick={() => { prevViewRef.current = "archive"; setSelectedId(c.id); setView("detail"); }}
+                              style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", display: "flex", justifyContent: "space-between" }}>
+                              <span>{c.name} <span style={{ color: "var(--color-text-tertiary)", fontSize: 12 }}>{c.type}</span></span>
+                              <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                                {new Date(c.receivedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                                {c.isOvernightBatch ? " 🌙" : ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {archiveSubTab === "matrix" && (() => {
+              const now = new Date();
+              const cutoff = matrixRange === "3m" ? new Date(now.getFullYear(), now.getMonth()-3, now.getDate())
+                : matrixRange === "6m" ? new Date(now.getFullYear(), now.getMonth()-6, now.getDate())
+                : null;
+
+              const targets = commissions.filter(c => {
+                if (!c.receivedAt || isStatsExcluded(c.type)) return false;
+                if (cutoff && new Date(c.receivedAt) < cutoff) return false;
+                return true;
+              });
+
+              const buckets = {};
+              targets.forEach(c => {
+                const dt = new Date(c.receivedAt);
+                const dow = dt.getDay();
+                const slot = getTimeSlot(c.receivedAt, c.isOvernightBatch);
+                const key = dow + "-" + slot;
+                if (!buckets[key]) buckets[key] = [];
+                buckets[key].push(c);
+              });
+
+              const dowLabels = ["일","월","화","수","목","금","토"];
+              const counts = Object.values(buckets).map(l => l.length);
+              const maxCount = counts.length > 0 ? Math.max.apply(null, counts) : 1;
+              const levelForCount = (n) => {
+                if (n === 0) return 0;
+                if (maxCount <= 1) return 4;
+                const ratio = n / maxCount;
+                if (ratio <= 0.25) return 1;
+                if (ratio <= 0.5) return 2;
+                if (ratio <= 0.75) return 3;
+                return 4;
+              };
+
+              const selKey = heatmapCell && heatmapCell.type === "matrix" ? heatmapCell.key : null;
+              const selList = selKey && buckets[selKey]
+                ? buckets[selKey].slice().sort((a,b) => new Date(b.receivedAt) - new Date(a.receivedAt))
+                : [];
+
+              return (
+                <div>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <label style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>기간</label>
+                    <select value={matrixRange}
+                      onChange={e => { setMatrixRange(e.target.value); setHeatmapCell(null); }}
+                      style={{ height: 32, fontSize: 13, minWidth: 100 }}>
+                      <option value="all">전체</option>
+                      <option value="3m">최근 3개월</option>
+                      <option value="6m">최근 6개월</option>
+                    </select>
+                    <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                      낙서 제외 · 총 {targets.length}건
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: "var(--color-background-primary)",
+                    border: "0.5px solid var(--color-border-tertiary)",
+                    borderRadius: "var(--border-radius-lg)",
+                    padding: "1.25rem"
+                  }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "auto repeat(4, 1fr)", gap: 6, alignItems: "center" }}>
+                      <div></div>
+                      {TIME_SLOTS.map(s => (
+                        <div key={s} style={{ fontSize: 12, textAlign: "center", color: "var(--color-text-secondary)", padding: "4px 0" }}>{s}</div>
+                      ))}
+                      {dowLabels.map((d, di) => (
+                        <React.Fragment key={di}>
+                          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "0 8px", textAlign: "right" }}>{d}</div>
+                          {TIME_SLOTS.map(s => {
+                            const key = di + "-" + s;
+                            const count = buckets[key] ? buckets[key].length : 0;
+                            const level = levelForCount(count);
+                            const isSel = selKey === key;
+                            return (
+                              <div key={s}
+                                onClick={() => { if (count > 0) setHeatmapCell({ type: "matrix", key, label: d + "요일 " + s }); }}
+                                style={{
+                                  height: 44,
+                                  background: HEATMAP_COLORS[level],
+                                  borderRadius: 4,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: 13, fontWeight: 500,
+                                  color: level >= 3 ? "#fff" : "var(--color-text-primary)",
+                                  cursor: count > 0 ? "pointer" : "default",
+                                  boxShadow: isSel ? "0 0 0 2px " + HEATMAP_ACCENT : "none"
+                                }}>
+                                {count > 0 ? count : ""}
+                              </div>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selKey && selList.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+                        {heatmapCell.label} ({selList.length}건)
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {selList.map(c => (
+                          <div key={c.id}
+                            onClick={() => { prevViewRef.current = "archive"; setSelectedId(c.id); setView("detail"); }}
+                            style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", display: "flex", justifyContent: "space-between" }}>
+                            <span>{c.name} <span style={{ color: "var(--color-text-tertiary)", fontSize: 12 }}>{c.type}</span></span>
+                            <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                              {new Date(c.receivedAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
+                              {c.isOvernightBatch ? " 🌙" : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
@@ -1617,7 +1933,9 @@ function CommissionTracker() {
                         imageData: null, notes: selected.notes || "",
                         requestUrl: selected.requestUrl || "", deadline: selected.deadline || "",
                         paidDate: selected.paidDate || "",
-                        platform: selected.platform || ""
+                        platform: selected.platform || "",
+                        receivedAt: selected.receivedAt || "",
+                        isOvernightBatch: !!selected.isOvernightBatch
                       });
                       setEditingId(selected.id);
                       setShowForm(true);
