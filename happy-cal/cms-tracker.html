@@ -1571,7 +1571,7 @@ function CommissionTracker() {
                       {years.map(y => <option key={y} value={y}>{y}년</option>)}
                     </select>
                     <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                      낙서 제외 · 접수 시각 기준 · 총 {totalYearCount}건
+                      일러스트 제외 · 접수 시각 기준 · 총 {totalYearCount}건
                     </div>
                   </div>
 
@@ -1582,7 +1582,7 @@ function CommissionTracker() {
                     padding: "1rem",
                     overflowX: "auto"
                   }}>
-                    <div style={{ display: "inline-block", minWidth: 780 }}>
+                    <div style={{ display: "inline-block" }}>
                       <div style={{ position: "relative", height: 16, marginLeft: 24, marginBottom: 2 }}>
                         {monthLabels.map(ml => (
                           <span key={ml.month} style={{
@@ -1704,7 +1704,7 @@ function CommissionTracker() {
                       <option value="6m">최근 6개월</option>
                     </select>
                     <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                      낙서 제외 · 총 {targets.length}건
+                      일러스트 제외 · 총 {targets.length}건
                     </div>
                   </div>
 
