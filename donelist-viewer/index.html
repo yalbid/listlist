@@ -845,6 +845,12 @@ function DonelistViewer() {
                 const dayStatusLog = dayData.statusLog || [];
                 const uniqueTags = [...new Set(dayStatusLog.filter(s => s.type === "tag").map(s => s.value))];
                 const uniqueEvents = [...new Set(dayStatusLog.filter(s => s.type === "event").map(s => s.value))];
+                const noteTooltip = (type, value) => {
+                  const notes = dayStatusLog
+                    .filter(s => s.type === type && s.value === value && s.note)
+                    .map(s => formatTime(s.time) + " — " + s.note);
+                  return notes.length > 0 ? notes.join("\n") : undefined;
+                };
                 return (
                   <div key={group.dateKey} className="fade-in" style={S.dateGroup}>
                     {/* 날짜 헤더 */}
@@ -856,8 +862,8 @@ function DonelistViewer() {
                       {dayPeriod === 'start' && <span style={{ fontSize: 13 }} title="생리 시작일">{"\u{1FA78}"}</span>}
                       {dayPeriod === 'ongoing' && <span style={{ fontSize: 13, opacity: 0.6 }} title="생리 중">{"\u{1FA78}"}</span>}
                       {dayPeriod === 'end' && <span style={{ fontSize: 13 }} title="생리 종료일">{"\u{2705}"}</span>}
-                      {uniqueTags.map(t => <span key={t} style={S.headerTag}>{t}</span>)}
-                      {uniqueEvents.map(e => <span key={e} style={S.headerEvent}>{e}</span>)}
+                      {uniqueTags.map(t => <span key={t} style={S.headerTag} title={noteTooltip("tag", t)}>{t}</span>)}
+                      {uniqueEvents.map(e => <span key={e} style={S.headerEvent} title={noteTooltip("event", e)}>{e}</span>)}
                       <span style={{ flex: 1 }} />
                       <span style={S.dateCount}>{group.items.length}건</span>
                     </div>
